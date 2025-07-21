@@ -198,7 +198,7 @@ const userController = {
                 });
             }
 
-            const result = await userService.deleteUser(parseInt(id));
+            const result = await userService.deleteUser(id);
             
             res.status(200).json(result);
         } catch (error) {

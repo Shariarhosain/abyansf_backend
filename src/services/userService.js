@@ -514,7 +514,7 @@ async getUserByUid(uid) {
       }
 
       // Delete related records first
-      await prisma.varification.deleteMany({ where: { userId: id } });
+      await prisma.verification.deleteMany({ where: { userId: id } });
       await prisma.log.deleteMany({ where: { userId: id } });
 
       // Delete user
@@ -523,7 +523,7 @@ async getUserByUid(uid) {
       setImmediate(async () => {
         // Delete from Firebase if uid exists
         if (user.uid) {
-          await publishEvent("firebase_tasks", {
+           await publishToQueue("firebase_tasks", {
             type: "deleteUser",
             uid: user.uid,
           });
