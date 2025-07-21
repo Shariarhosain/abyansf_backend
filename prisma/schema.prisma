@@ -1,0 +1,214 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String           @id @default(cuid())
+  name              String?
+  email             String?          @unique
+  whatsapp          String?          @unique
+  password          String?
+  role              Role?            @default(USER)
+  profile_pic       String?
+  gender            String?
+  dateOfBirth       DateTime?
+  address           String?          @default("Dubai")
+  isActive          Boolean?         @default(true)
+  send_payment_link Boolean?         @default(false)
+  uid               String?          @unique
+  fcm_token         String?          @unique
+  paid              Boolean?         @default(false)
+  package           String?
+  isVerified        Boolean?         @default(false)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  logs              Log[]
+  notifications     Notification[]
+  verification      Verification[]
+  bookings          listingBooking[]
+  subCategoryBookings subCategoryBooking[]
+  
+  @@index([createdAt])
+  @@index([role])
+  @@index([isActive])
+}
+
+model Verification {
+  id        String    @id @default(cuid())
+  userId    String
+  email     String?
+  code      Int?
+  time      DateTime?
+  isUsed    Boolean?  @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([email])
+  @@index([isUsed])
+}
+
+model Log {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String
+  details   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id])
+  
+  @@index([userId])
+  @@index([createdAt])
+  @@index([action])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+model HeroSection {
+  id            Int         @id @default(autoincrement())
+  imageUrl      String
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  subCategoryId Int         @unique
+  subCategory   SubCategory @relation(fields: [subCategoryId], references: [id], onDelete: Cascade)
+}
+
+model MainCategory {
+  id            Int           @id @default(autoincrement())
+  name          String        @unique
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  subCategories SubCategory[]
+}
+
+model SubCategory {
+  id                  Int                @id @default(autoincrement())
+  name                String
+  img                 String?
+  hasSpecificCategory Boolean            @default(false)
+  mainCategoryId      Int
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  contractWhatsapp    Boolean            @default(false)
+  fromName            String?
+  hasForm             Boolean            @default(false)
+  heroSection         HeroSection?
+  specificCategories  SpecificCategory[]
+  mainCategory        MainCategory       @relation(fields: [mainCategoryId], references: [id], onDelete: Cascade)
+  subCategoryBookings subCategoryBooking[]
+
+  @@unique([mainCategoryId, name])
+  @@index([mainCategoryId])
+  @@index([hasSpecificCategory])
+}
+
+model SpecificCategory {
+  id            Int         @id @default(autoincrement())
+  name          String
+  subCategoryId Int
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  listings      Listing[]
+  subCategory   SubCategory @relation(fields: [subCategoryId], references: [id], onDelete: Cascade)
+
+  @@unique([subCategoryId, name])
+  @@index([subCategoryId, name], map: "idx_specific_category_sub_category_name")
+}
+
+model Listing {
+  id                            Int              @id @default(autoincrement())
+  name                          String
+  main_image                    String
+  sub_images                    String[]
+  location                      String
+  member_privileges             String[]
+  member_privileges_description String?
+  description                   String?
+  hours                         String[]
+  specificCategoryId            Int
+  createdAt                     DateTime         @default(now())
+  updatedAt                     DateTime         @updatedAt
+  formName                      String?
+  isActive                      Boolean          @default(true)
+  menuImages                    String[]
+  typeofservice                 String[]
+  venueName                     String[]
+  specificCategory              SpecificCategory @relation(fields: [specificCategoryId], references: [id], onDelete: Cascade)
+  bookings                      listingBooking[]
+  
+  @@index([specificCategoryId])
+  @@index([isActive])
+  @@index([createdAt])
+  @@index([location])
+}
+
+model listingBooking {
+  id                  Int       @id @default(autoincrement())
+  userId              String
+  listingId           Int
+  bookingDate         DateTime? @db.Date
+  bookingTime         String?
+  status              String    @default("Pending")
+  name                String?
+  email               String?
+  whatsapp            String?
+  venueName           String?
+  typeofservice       String?
+  numberofguest_adult Int?
+  numberofguest_child Int?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  listing             Listing   @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([status], map: "idx_listing_booking_status")
+  @@index([userId], map: "idx_listing_booking_user_id")
+  @@index([createdAt], map: "idx_listing_booking_created_at")
+  @@index([listingId])
+  @@index([bookingDate])
+  @@index([status, userId])
+  @@index([status, createdAt])
+}
+
+model subCategoryBooking {
+  id            Int         @id @default(autoincrement())
+  userId        String
+  subCategoryId Int
+  status        String      @default("Pending")
+  bookingInfo   Json?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subCategory   SubCategory @relation(fields: [subCategoryId], references: [id], onDelete: Cascade)
+  
+  @@index([status], map: "idx_subcategory_booking_status")
+  @@index([userId], map: "idx_subcategory_booking_user_id")
+  @@index([createdAt], map: "idx_subcategory_booking_created_at")
+  @@index([subCategoryId])
+  @@index([status, userId])
+  @@index([status, createdAt])
+}
+
+enum Role {
+  USER
+  ADMIN
+}
