@@ -13,6 +13,7 @@ router.put('/reset-password', userController.resetPassword);
 router.post('/resend-verification-email', userController.resendVerificationEmail);
 router.post('/login', userController.loginUser);
 router.get('/admin/whatsapp-number', userController.adminWhatsAppNumber);
+router.put('/password-reset', userController.passwordUpdate);
 
 // Middleware to verify token for protected routes
 router.use(verifyToken);

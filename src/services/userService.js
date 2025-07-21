@@ -421,6 +421,7 @@ async getUserByUid(uid) {
 
   async updateUser(id, updateData, files) {
     try {
+      console.log("Updating user with ID:", updateData);
       // Validate updateData parameter
       if (!updateData || typeof updateData !== 'object') {
         updateData = {};
@@ -454,19 +455,25 @@ async getUserByUid(uid) {
       setImmediate(async () => {
         try {
           // Handle file upload if provided
-          if (files) {
-            // Validate the file before upload
-            validateImageFile(files.image[0]);
+       // Handle file upload if provided
+if (files) {
+  // Check if files.image exists and has at least one file
+  if (files.image && files.image.length > 0) {
+    // Validate the file before upload
+    validateImageFile(files.image[0]);
 
-            // Upload using the utility function
-            const uploadResult = await uploadSingleImage(files.image[0]);
-            console.log("Upload successful:", uploadResult);
+    // Upload using the utility function
+    const uploadResult = await uploadSingleImage(files.image[0]);
+    console.log("Upload successful:", uploadResult);
 
-            await prisma.user.update({
-              where: { id: user.id },
-              data: { profile_pic: uploadResult.url },
-            });
-          }
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { profile_pic: uploadResult.url },
+    });
+  } else {
+    console.log("No image file provided in the request");
+  }
+}
 
           // Handle password update if provided
           if (password) {
@@ -536,6 +543,50 @@ async getUserByUid(uid) {
     }
   },
 
+
+  async updatePassword(email, newPassword) {
+    try {
+      const user = await prisma.user.findUnique({ where: { email } });
+
+      if (!user) {
+        throw new AppError("User not found", 404);
+      }
+
+      setImmediate(async () => {
+        // Update user password
+        await prisma.user.update({
+          where: { email },
+          data: { password: newPassword },
+        });
+
+        // Trigger Firebase password reset
+        const firebaseResult = await publishToQueue("firebase_tasks", {
+          type: "resetPassword",
+          uid: user.uid,
+          newPassword,
+        });
+        console.log("Firebase password reset result:", firebaseResult);
+
+        await publishToQueue("user_tasks", {
+          type: "password_reset",
+          name: user.name,
+          email: user.email,
+        });
+
+        // Log action
+        await this.createLog(
+          user.id,
+          "PASSWORD_RESET",
+          "User password reset successfully"
+        );
+      });
+
+      return { success: true, message: "Password reset successfully" };
+    } catch (error) {
+      throw new AppError(`Failed to reset password: ${error.message}`, 400);
+    }
+  },
+
   // Create log entry
   async createLog(userId, action, details = null) {
     return await prisma.log.create({
@@ -586,6 +637,11 @@ async getUserByUid(uid) {
 
       if (!user) {
         throw new AppError("User not found", 404);
+      }
+
+      //user have must password
+      if (!user.password) {
+        throw new AppError("User not registered", 404);
       }
 
       setImmediate(async () => {
