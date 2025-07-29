@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import AppError from "../utils/error.js";
 import publishToQueue from "../utils/publisher.js";
+import notificationService from "./notificationService.js"; // Import notification service
 
 const prisma = new PrismaClient();
 
@@ -126,6 +127,18 @@ const listingBookingService = {
 
           });
           console.log("Booking confirmation for admin task published for booking:", booking.id);
+             // --- NOTIFICATION ---
+      await notificationService.createNotification(
+        user.id,
+        'Booking Request Received',
+        `Your booking request for ${listing.name} has been received and is now pending.`
+      );
+      await notificationService.createNotificationForAdmins(
+        'New Booking Request',
+        `A new booking for ${listing.name} has been requested by ${user.name}.`
+      );
+      // --- END NOTIFICATION ---
+
         } catch (error) {
           console.error("Failed to publish booking confirmation:", error.message);
         }
@@ -557,6 +570,17 @@ const listingBookingService = {
             cancellationReason: reason
           });
           console.log("Booking cancellation task published for booking:", booking.id);
+           // --- NOTIFICATION ---
+      await notificationService.createNotification(
+        booking.userId,
+        'Booking Cancelled',
+        `Your booking for ${booking.listing.name} has been cancelled.`
+      );
+      await notificationService.createNotificationForAdmins(
+        'Booking Cancelled',
+        `The booking for ${booking.listing.name} by ${booking.user.name} was cancelled by ${user.name}.`
+      );
+      // --- END NOTIFICATION ---
         } catch (error) {
           console.error("Failed to publish booking cancellation:", error.message);
         }
@@ -664,6 +688,19 @@ const listingBookingService = {
             details: booking
           });
           console.log("Booking deletion task published for booking:", booking.id);
+          // --- NOTIFICATION ---
+      // Notify user and admins about the deletion
+      await notificationService.createNotification(
+        booking.userId,
+        'Booking Deleted',
+        `Your booking for ${booking.listing.name} has been deleted by an administrator.`
+      );
+      await notificationService.createNotificationForAdmins(
+        'Booking Deleted',
+        `The booking for ${booking.listing.name} by ${booking.user.name} was deleted by ${user.name}.`
+      );
+      // --- END NOTIFICATION ---
+
         } catch (error) {
           console.error("Failed to publish booking deletion:", error.message);
         }

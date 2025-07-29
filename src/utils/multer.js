@@ -9,7 +9,8 @@ const upload = multer({
 }).fields([
     { name: 'image', maxCount: 1 },
     { name: 'heroImage', maxCount: 20 },
-    { name: 'images', maxCount: 20 }
+    { name: 'images', maxCount: 20 },
+    { name: 'event_img', maxCount: 1 }
 ]);
 
 // Configure multer for multiple image fields

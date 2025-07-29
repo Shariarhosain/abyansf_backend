@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import publishToQueue from "../utils/publisher.js"; // Adjust the path as necessary
 import { uploadSingleImage, validateImageFile } from '../utils/imghelper.js';
 import AppError from "../utils/error.js";
+import notificationService from "./notificationService.js"; // Import notification service
 import generateToken from "../middlewares/jwt.js"; // Adjust the path as necessary
 import dotenv from "dotenv";
 dotenv.config();
@@ -54,7 +55,7 @@ const userService = {
           isVerified: false,
         },
       });
-
+  
       setImmediate(async () => {
         const code = this.generateVerificationCode();
         const expiryTime = new Date(Date.now() + 2 * 60 * 1000); // 2 minutes
@@ -182,7 +183,21 @@ const userService = {
           "EMAIL_VERIFIED",
           "Email verification completed"
         );
+              // --- NOTIFICATION ---
+      await notificationService.createNotificationForAdmins(
+        'New User Registered',
+        `A new user, ${user.name} (${user.email}), has registered and is awaiting for payment link.`
+      );
+      // --- END NOTIFICATION ---
+          // --- NOTIFICATION ---
+      await notificationService.createNotification(
+        user.id,
+        'Payment Required',
+        'Your account is ready for payment. Please check your email for the payment link to activate your account.'
+      );
+      // --- END NOTIFICATION ---
       });
+   
       return {
         success: true,
         message: "Email verification successful",
@@ -254,6 +269,7 @@ const userService = {
         throw new AppError("User is not verified", 400);
       }
 
+
       setImmediate(async () => {
         const tempPassword = this.generateTempPassword();
         // Update user status
@@ -296,6 +312,17 @@ const userService = {
           "PAYMENT_CONFIRMED",
           `Payment confirmed and account activated with package: ${packageInfo}`
         );
+          // --- NOTIFICATION ---
+      await notificationService.createNotification(
+        userId,
+        'Payment Confirmed & Account Activated',
+        `Your payment has been confirmed for package: ${packageInfo}. Your account is now active.`
+      );
+      await notificationService.createNotificationForAdmins(
+        'Payment Confirmed',
+        `Payment has been confirmed for user ${user.name} (${user.email}) for package: ${packageInfo}.`
+      );
+      // --- END NOTIFICATION ---
       });
 
       return {
@@ -470,6 +497,11 @@ if (files) {
       where: { id: user.id },
       data: { profile_pic: uploadResult.url },
     });
+    await notificationService.createNotification(
+      user.id,
+      'Profile Picture Updated',
+      'Your profile picture has been successfully updated.'
+    );
   } else {
     console.log("No image file provided in the request");
   }
@@ -497,7 +529,12 @@ if (files) {
               name: user.name,
               email: user.email,
             });
-            
+
+            await notificationService.createNotification(
+              user.id,
+              'Password Reset',
+              'Your password has been successfully reset.'
+            );
             console.log("Password reset task published for user:", user.email);
           }
         } catch (err) {
@@ -535,6 +572,12 @@ if (files) {
             uid: user.uid,
           });
         }
+             // --- NOTIFICATION ---
+      await notificationService.createNotificationForAdmins(
+        'User Deleted',
+        `The user account for ${user.name} (${user.email}) has been deleted.`
+      );
+      // --- END NOTIFICATION ---
       });
 
       return { success: true, message: "User deleted successfully" };
@@ -664,6 +707,13 @@ if (files) {
           name: user.name,
           email: user.email,
         });
+
+        // Notify user about password reset
+        await notificationService.createNotification(
+          user.id,
+          'Password Reset',
+          'Your password has been successfully reset.'
+        );
 
         // Log action
         await this.createLog(

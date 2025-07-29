@@ -32,6 +32,7 @@ model User {
   verification      Verification[]
   bookings          listingBooking[]
   subCategoryBookings subCategoryBooking[]
+  eventBookings     EventBooking[]
   
   @@index([createdAt])
   @@index([role])
@@ -211,4 +212,38 @@ model subCategoryBooking {
 enum Role {
   USER
   ADMIN
+}
+
+model Event {
+  id          Int            @id @default(autoincrement())
+  title       String
+  event_img   String
+  date        DateTime       @db.Date
+  time        String
+  description String
+  max_person  Int
+  location    String
+  status      String         @default("Active") // Active, Cancelled, Completed
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  bookings    EventBooking[]
+
+  @@index([date])
+  @@index([status])
+}
+
+model EventBooking {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  eventId   Int
+  status    String   @default("Booked") // Booked, Cancelled
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventId])
+  @@index([userId])
+  @@index([eventId])
+  @@index([status])
 }

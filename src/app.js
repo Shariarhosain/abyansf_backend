@@ -11,6 +11,8 @@ import categoryRouter from './routes/categoryRoute.js';
 import listingRouter from './routes/listingRoute.js';
 import listingBookingRouter from './routes/listingBookingRoutes.js';
 import subCategoryBookingRouter from './routes/subCategoryBookingRoute.js';
+import eventRouter from './routes/eventRoute.js';
+import notificationRoutes from './routes/notificationRoutes.js';
 
 
 
@@ -55,6 +57,9 @@ app.use('/api/categories', categoryRouter);
 app.use('/api/listings', listingRouter);
 app.use('/api/bookings', listingBookingRouter);
 app.use('/api/sub-category-bookings', subCategoryBookingRouter);
+app.use('/api/events', eventRouter);
+app.use('/api/notifications', notificationRoutes);
+
 
 // if other  mean which i not declare then say hi hackers
 app.use((req, res) => {
