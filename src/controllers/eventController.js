@@ -34,7 +34,10 @@ const eventController = {
     async getUpcomingEvents(req, res, next) {
         try {
             const { page, limit } = req.query;
-            const events = await eventService.getUpcomingEvents({ page, limit });
+            // limit and page int
+            const pageInt = parseInt(page, 10) || 1;
+            const limitInt = parseInt(limit, 10) || 10;
+            const events = await eventService.getUpcomingEvents({ page: pageInt, limit: limitInt });
             res.status(200).json({
                 success: true,
                 data: events,
