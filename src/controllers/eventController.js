@@ -47,7 +47,10 @@ const eventController = {
     async getPastEvents(req, res, next) {
         try {
             const { page, limit } = req.query;
-            const events = await eventService.getPastEvents({ page, limit });
+            // limit and page int
+            const pageInt = parseInt(page, 10) || 1;
+            const limitInt = parseInt(limit, 10) || 10;
+            const events = await eventService.getPastEvents({ page: pageInt, limit: limitInt });
             res.status(200).json({
                 success: true,
                 data: events,
