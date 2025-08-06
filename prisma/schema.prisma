@@ -184,6 +184,9 @@ model Listing {
   menuImages                    String[]
   typeofservice                 String[]
   venueName                     String[]
+  contractWhatsapp              Boolean          @default(false)
+  fromName                      String?
+  hasForm                       Boolean          @default(false)
   specificCategory              SpecificCategory @relation(fields: [specificCategoryId], references: [id], onDelete: Cascade)
   bookings                      listingBooking[]
   

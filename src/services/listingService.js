@@ -10,7 +10,7 @@ const getFilenameFromUrl = (url) => {
 };
 const listingService = {
   // Create new listing
-async createListing(listingData, files) {
+ async createListing(listingData, files) {
     try {
         const {
             name,
@@ -23,7 +23,11 @@ async createListing(listingData, files) {
             venueName,
             specificCategoryId,
             menuImages,
-            typeofservice
+            typeofservice,
+           contractWhatsapp = false,
+           fromName = null,
+           hasForm = false,
+
         } = listingData;
 
         // Validate required fields
@@ -39,8 +43,10 @@ async createListing(listingData, files) {
         if (!specificCategory) {
             throw new AppError('Specific category not found', 404);
         }
+      const contractWhatsappBool = contractWhatsapp === 'true' || contractWhatsapp === true;
+      const hasFormBool = hasForm === 'true' || hasForm === true;
+      const fromNameValue = fromName ? fromName : null;
 
-        // Create listing with temporary image placeholders
         const listing = await prisma.listing.create({
             data: {
                 name,
@@ -50,6 +56,9 @@ async createListing(listingData, files) {
                 member_privileges: Array.isArray(member_privileges) ? member_privileges : [member_privileges].filter(Boolean),
                 member_privileges_description,
                 description,
+                contractWhatsappBool,
+                fromName: fromNameValue,
+                hasForm: hasFormBool,
                 hours: Array.isArray(hours) ? hours : [hours].filter(Boolean),
                 formName,
                 venueName: Array.isArray(venueName) ? venueName : [venueName].filter(Boolean),
@@ -374,8 +383,17 @@ async createListing(listingData, files) {
         specificCategoryId,
         menuImages,
         typeofservice,
-        isActive
+        isActive,
+        contractWhatsapp = false,
+        fromName = null,
+        hasForm = false,
       } = updateData;
+
+
+      // string to boolean
+      const contractWhatsappBool = contractWhatsapp === 'true' || contractWhatsapp === true;
+      const hasFormBool = hasForm === 'true' || hasForm === true;
+      const fromNameValue = fromName ? fromName : null;
 
       const updatedListing = await prisma.listing.update({
         where: { id: parseInt(id) },
@@ -390,12 +408,14 @@ async createListing(listingData, files) {
           ...(hours && { 
             hours: Array.isArray(hours) ? hours : [hours].filter(Boolean)
           }),
-          ...(formName !== undefined && { formName }),
           ...(venueName !== undefined && { venueName: Array.isArray(venueName) ? venueName : [venueName].filter(Boolean) }),
           ...(specificCategoryId && { specificCategoryId: parseInt(specificCategoryId) }),
           ...(menuImages !== undefined && { menuImages }),
           ...(typeofservice !== undefined && { typeofservice: Array.isArray(typeofservice) ? typeofservice : [typeofservice].filter(Boolean) }),
-          ...(isActive !== undefined && { isActive: Boolean(isActive) })
+          ...(isActive !== undefined && { isActive: Boolean(isActive) }),
+          ...(contractWhatsapp !== undefined && { contractWhatsapp: contractWhatsappBool }),
+          ...(fromName !== undefined && { fromName: fromNameValue }),
+          ...(hasForm !== undefined && { hasForm: hasFormBool })
         },
         include: {
           specificCategory: {
