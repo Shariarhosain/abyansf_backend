@@ -58,4 +58,12 @@ router.put('/hero/:subCategoryId', upload, categoryController.updateHeroSectionI
 // NEW: Delete hero section for sub category
 router.delete('/hero/:subCategoryId', categoryController.deleteHeroSection);
 
+
+//mini sub category routes
+router.get('/mini-sub', categoryController.getAllMiniSubCategories);
+router.get('/mini-sub/:id', categoryController.getMiniSubCategoryById);
+router.post('/mini-sub', upload, categoryController.createMiniSubCategory);
+router.put('/mini-sub/:id', upload, categoryController.updateMiniSubCategory);
+router.delete('/mini-sub/:id', categoryController.deleteMiniSubCategory);
+
 export default router;

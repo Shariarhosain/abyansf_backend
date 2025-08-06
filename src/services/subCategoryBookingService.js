@@ -23,65 +23,175 @@ const deepMerge = (target, source) => {
 };
 const subCategoryBookingService = {
 
-  async createRequest(requestDetails, userId) {
-    if (!requestDetails || Object.keys(requestDetails).length === 0) {
-      throw new AppError("Request details cannot be empty", 400);
-    }
+  // async createRequest(requestDetails, userId) {
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) {
-      throw new AppError("User not found", 404);
-    }
+  //   //user can send subcategories or mini subcategories
+  //   if (!requestDetails.subCategoryId && !requestDetails.miniSubCategoryId) {
+  //     throw new AppError("Either subCategoryId or miniSubCategoryId must be provided", 400);
+  //   }
 
-    const request = await prisma.subCategoryBooking.create({
-      data: {
-        userId,
-        bookingInfo: requestDetails,
-        subCategoryId: requestDetails.subCategoryId,
-        status: "Pending",
-      },
+  //   if (!requestDetails || Object.keys(requestDetails).length === 0) {
+  //     throw new AppError("Request details cannot be empty", 400);
+  //   }
+
+  //   const user = await prisma.user.findUnique({ where: { id: userId } });
+  //   if (!user) {
+  //     throw new AppError("User not found", 404);
+  //   }
+
+  //   const request = await prisma.subCategoryBooking.create({
+  //     data: {
+  //       userId,
+  //       bookingInfo: requestDetails,
+  //       subCategoryId: requestDetails.subCategoryId? parseInt(requestDetails.subCategoryId) : null,
+  //       miniSubCategoryId: requestDetails.miniSubCategoryId? parseInt(requestDetails.miniSubCategoryId) : null,
+  //       status: "Pending",
+  //     },
      
-    });
+  //   });
 
-    // Send notifications in the background
-    setImmediate(async () => {
-      try {
+  //   // Send notifications in the background
+  //   setImmediate(async () => {
+  //     try {
 
-        const fullRequestDetails = await prisma.subCategoryBooking.findUnique({
-          where: { id: request.id }
-          , include: {
-            user: { select: { email: true, name: true } },
-            subCategory: true,
-          }
-        });
-        // Notify user of confirmation
-        await publishToQueue("sub_category_booking", {
-          type: "sub_category_booking_request_confirmation",
-          details: fullRequestDetails,
-          userEmail: user.email,
-        });
+  //       const fullRequestDetails = await prisma.subCategoryBooking.findUnique({
+  //         where: { id: request.id }
+  //         , include: {
+  //           user: { select: { email: true, name: true } },
+  //           subCategory: true,
+  //         }
+  //       });
+  //       // Notify user of confirmation
+  //       await publishToQueue("sub_category_booking", {
+  //         type: "sub_category_booking_request_confirmation",
+  //         details: fullRequestDetails,
+  //         userEmail: user.email,
+  //       });
 
-        // Notify admin of new request
-        const adminUser = await prisma.user.findFirst({ where: { role: "ADMIN" } });
-        const adminEmail = adminUser ? adminUser.email : process.env.ADMIN_EMAIL;
-        if (adminEmail) {
-          await publishToQueue("sub_category_booking", {
-            type: "sub_category_booking_request_admin_notification",
-            details: fullRequestDetails,
-            adminEmail: adminEmail,
-          });
+  //       // Notify admin of new request
+  //       const adminUser = await prisma.user.findFirst({ where: { role: "ADMIN" } });
+  //       const adminEmail = adminUser ? adminUser.email : process.env.ADMIN_EMAIL;
+  //       if (adminEmail) {
+  //         await publishToQueue("sub_category_booking", {
+  //           type: "sub_category_booking_request_admin_notification",
+  //           details: fullRequestDetails,
+  //           adminEmail: adminEmail,
+  //         });
+  //       }
+  //     } catch (error) {
+  //       console.error("Failed to publish  booking request tasks:", error);
+  //     }
+  //   });
+
+  //   return {
+  //     success: true,
+  //     message: "Your  booking request has been submitted successfully.",
+  //     data: request,
+  //   };
+  // },
+async createRequest(requestDetails, userId) {
+  // 1. --- Validate Input ---
+  const { subCategoryId, miniSubCategoryId } = requestDetails;
+
+  // Ensure request details are provided
+  if (!requestDetails || Object.keys(requestDetails).length === 0) {
+    throw new AppError("Request details cannot be empty", 400);
+  }
+
+  // Ensure exactly one category ID is provided to avoid ambiguity
+  if ((!subCategoryId && !miniSubCategoryId) || (subCategoryId && miniSubCategoryId)) {
+    throw new AppError("You must provide either a 'subCategoryId' or a 'miniSubCategoryId', but not both.", 400);
+  }
+
+  // 2. --- Verify User ---
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) {
+    throw new AppError("User not found. You must be logged in to make a request.", 404);
+  }
+
+  // 3. --- Create the Booking Record ---
+  const request = await prisma.subCategoryBooking.create({
+    data: {
+      bookingInfo: requestDetails, // Store the full original request for reference
+      status: "Pending", // Default status
+      // Connect the booking to an existing user using the relation
+      user: {
+        connect: {
+          id: userId,
+        },
+      },
+      // FIX: Conditionally connect to the appropriate category relation
+      ...(subCategoryId && {
+        subCategory: {
+          connect: { id: parseInt(subCategoryId) }
         }
-      } catch (error) {
-        console.error("Failed to publish  booking request tasks:", error);
-      }
-    });
+      }),
+      ...(miniSubCategoryId && {
+        miniSubCategory: {
+          connect: { id: parseInt(miniSubCategoryId) }
+        }
+      }),
+    },
+  });
 
-    return {
-      success: true,
-      message: "Your  booking request has been submitted successfully.",
-      data: request,
-    };
-  },
+
+  // 4. --- Handle Notifications in the Background ---
+  setImmediate(async () => {
+    try {
+      // Dynamically build the include query based on which category was booked
+      const includeClause = {
+        user: { select: { email: true, name: true } }, // Always include the user
+      };
+
+      // The 'request' object returned from 'create' will contain the IDs
+      if (request.subCategoryId) {
+        includeClause.subCategory = { include: { mainCategory: true } };
+      } else if (request.miniSubCategoryId) {
+        includeClause.miniSubCategory = { include: { subCategory: true } };
+      }
+
+      // Fetch the full details for the notification payload
+      const fullRequestDetails = await prisma.subCategoryBooking.findUnique({
+        where: { id: request.id },
+        include: includeClause,
+      });
+
+      if (!fullRequestDetails) {
+        console.error(`Failed to fetch full details for booking ID: ${request.id}`);
+        return;
+      }
+
+      // Publish confirmation notification to the user
+      await publishToQueue("sub_category_booking", {
+        type: "sub_category_booking_request_confirmation",
+        details: fullRequestDetails,
+        userEmail: user.email,
+      });
+
+      // Publish notification to the admin
+      const adminUser = await prisma.user.findFirst({ where: { role: "ADMIN" } });
+      const adminEmail = adminUser?.email || process.env.ADMIN_EMAIL;
+
+      if (adminEmail) {
+        await publishToQueue("sub_category_booking", {
+          type: "sub_category_booking_request_admin_notification",
+          details: fullRequestDetails,
+          adminEmail: adminEmail,
+        });
+      }
+    } catch (error) {
+      console.error(`Failed to publish booking request tasks for booking ID ${request.id}:`, error);
+    }
+  });
+
+  // 5. --- Return Immediate Success Response ---
+  return {
+    success: true,
+    message: "Your booking request has been submitted successfully.",
+    data: request,
+  };
+}
+,
 
   
   async getAllRequests(page = 1, limit = 10, filters = {}) {
@@ -93,6 +203,7 @@ const subCategoryBookingService = {
       ...(userId && { userId }),
       //must have a subCategoryId to filter by subcategory convert string to number
       ...(filters.subCategoryId && { subCategoryId: parseInt(filters.subCategoryId) }),
+      ...(filters.miniSubCategoryId && { miniSubCategoryId: parseInt(filters.miniSubCategoryId) }),
     };
 
     const [requests, total] = await Promise.all([
@@ -103,6 +214,7 @@ const subCategoryBookingService = {
         orderBy: { createdAt: "desc" },
         include: { user: { select: { id: true, name: true, email: true } },
             subCategory: true,
+            miniSubCategory: true,
         },
       }),
       prisma.subCategoryBooking.count({ where }),
@@ -130,6 +242,7 @@ const subCategoryBookingService = {
           orderBy: { createdAt: "desc" },
           include: { user: { select: { id: true, name: true, email: true } },
             subCategory: true,
+            miniSubCategory: true,
           },
         }),
         prisma.subCategoryBooking.count({ where: { userId } }),
@@ -158,7 +271,8 @@ const subCategoryBookingService = {
       where: { id: parseInt(id) },
       include: { user: { select: { id: true, name: true, email: true } },
         subCategory: true,
-        },
+        miniSubCategory: true,
+    }
 
     });
 
@@ -223,7 +337,7 @@ async  updateRequestStatus(id, updateData) {
   const updatedRequest = await prisma.subCategoryBooking.update({
     where: { id: bookingId },
     data: dataToUpdate,
-    include: { user: { select: { name: true, email: true } }, subCategory: true },
+    include: { user: { select: { name: true, email: true } }, subCategory: true, miniSubCategory: true },
   });
 
   if (status && status !== currentBooking.status) {
@@ -268,7 +382,7 @@ async  updateRequestStatus(id, updateData) {
 
       const deletedRequest = await prisma.subCategoryBooking.delete({
         where: { id: bookingId },
-        include: { user: { select: { email: true, name: true } }, subCategory: true },
+        include: { user: { select: { email: true, name: true } }, subCategory: true, miniSubCategory: true },
       });
       // Optionally, publish a message to the queue about the deletion
       setImmediate(async () => {
@@ -340,6 +454,7 @@ async getUserBookingsGrouped(userId, page = 1, limit = 10) {
               mainCategory: true
             }
           },
+          miniSubCategory: true,
           user: {
             select: {
               id: true,
@@ -433,6 +548,7 @@ async getUserBookingsGrouped(userId, page = 1, limit = 10) {
       // Category information
       subCategory: booking.subCategory,
       mainCategory: booking.subCategory?.mainCategory,
+      miniSubCategory: booking.miniSubCategory,
       
       user: booking.user
     }));
@@ -553,6 +669,7 @@ async getUserBookingsGroupedWithStatusPagination(userId, pagination = {}) {
               mainCategory: true
             }
           },
+          miniSubCategory: true,
           user: {
             select: {
               id: true,
@@ -620,7 +737,8 @@ async getUserBookingsGroupedWithStatusPagination(userId, pagination = {}) {
       bookingInfo: booking.bookingInfo,
       subCategory: booking.subCategory,
       mainCategory: booking.subCategory?.mainCategory,
-      user: booking.user
+      user: booking.user,
+      miniSubCategory: booking.miniSubCategory
     }));
 
     // Combine and sort
@@ -803,6 +921,7 @@ async getAllUsersBookingsGrouped(page = 1, limit = 10, filters = {}) {
                 }
               }
             },
+            miniSubCategory: true,
             user: {
               select: {
                 id: true,
@@ -862,6 +981,7 @@ async getAllUsersBookingsGrouped(page = 1, limit = 10, filters = {}) {
         updatedAt: booking.updatedAt,
         bookingInfo: booking.bookingInfo,
         subCategory: booking.subCategory,
+        miniSubCategory: booking.miniSubCategory,
         user: booking.user
       }));
 
@@ -1052,6 +1172,7 @@ async getAllUsersBookingsGroupedByStatus(paginationOptions = {}) {
                   }
                 }
               },
+              miniSubCategory: true,
               user: {
                 select: {
                   id: true,
@@ -1095,6 +1216,7 @@ async getAllUsersBookingsGroupedByStatus(paginationOptions = {}) {
             status: b.status,
             createdAt: b.createdAt,
             subCategory: b.subCategory,
+            miniSubCategory: b.miniSubCategory,
             user: b.user,
             bookingInfo: b.bookingInfo
           }))
@@ -1159,6 +1281,7 @@ async getAllUsersBookingsGroupedByStatus(paginationOptions = {}) {
               }
             }
           },
+          miniSubCategory: true,
           user: {
             select: {
               id: true,
@@ -1201,6 +1324,7 @@ async getAllUsersBookingsGroupedByStatus(paginationOptions = {}) {
         status: b.status,
         createdAt: b.createdAt,
         subCategory: b.subCategory,
+        miniSubCategory: b.miniSubCategory,
         user: b.user,
         bookingInfo: b.bookingInfo
       }))

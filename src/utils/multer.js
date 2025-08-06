@@ -10,7 +10,8 @@ const upload = multer({
     { name: 'image', maxCount: 1 },
     { name: 'heroImage', maxCount: 20 },
     { name: 'images', maxCount: 20 },
-    { name: 'event_img', maxCount: 1 }
+    { name: 'event_img', maxCount: 1 },
+    { name: 'mini_sub', maxCount: 1 },
 ]);
 
 // Configure multer for multiple image fields

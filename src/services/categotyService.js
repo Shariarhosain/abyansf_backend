@@ -332,10 +332,10 @@ const categoryService = {
   },
 
 
-
   async createSubCategory(data, files) {
     try {
-      const { name, hasSpecificCategory: hasSpecificCategoryRaw = false, mainCategoryId, contractWhatsapp: contractWhatsappRaw = false, hasForm: hasFormRaw = false, fromName } = data;
+      console.log(data);
+      const { name, hasSpecificCategory: hasSpecificCategoryRaw = false, mainCategoryId, contractWhatsapp: contractWhatsappRaw = false, hasForm: hasFormRaw = false, fromName, hasMiniSubCategory: hasMiniSubCategoryRaw = false, description } = data;
 
       if (!name || !mainCategoryId) {
         throw new AppError('Sub category name and main category ID are required', 400);
@@ -367,9 +367,30 @@ const categoryService = {
         try {
           // String to boolean conversion
           const hasSpecificCategory = hasSpecificCategoryRaw === 'true' || hasSpecificCategoryRaw === true;
-          //string to boolean conversion
           const contractWhatsapp = contractWhatsappRaw === 'true' || contractWhatsappRaw === true;
           const hasForm = hasFormRaw === 'true' || hasFormRaw === true;
+          const hasMiniSubCategory = hasMiniSubCategoryRaw === 'true' || hasMiniSubCategoryRaw === true;
+
+          // Format description as JSON if provided
+          let formattedDescription = null;
+          if (description) {
+            try {
+              // If description is already an object, use it directly
+              if (typeof description === 'object') {
+                formattedDescription = description;
+              } else if (typeof description === 'string') {
+                // Try to parse as JSON first, if it fails, wrap in content object
+                try {
+                  formattedDescription = JSON.parse(description);
+                } catch {
+                  formattedDescription = { content: description };
+                }
+              }
+            } catch (jsonError) {
+              console.warn('Failed to format description as JSON, setting to null:', jsonError.message);
+              formattedDescription = null;
+            }
+          }
 
           // Create subCategory
           const subCategory = await prisma.subCategory.create({
@@ -378,9 +399,11 @@ const categoryService = {
               img: null, // Initially null
               hasSpecificCategory,
               mainCategoryId: parseInt(mainCategoryId),
+              description: formattedDescription,
               contractWhatsapp,
               hasForm,
-              fromName
+              fromName,
+              hasMiniSubCategory
             },
             include: {
               mainCategory: true,
@@ -442,12 +465,13 @@ const categoryService = {
     }
   },
 
-  // // Get all sub categories
+  // Get all sub categories
   async getAllSubCategories(page = 1, limit = 10, mainCategoryId = null) {
     try {
       const skip = (page - 1) * limit;
-      const where = mainCategoryId ? { mainCategoryId: parseInt(mainCategoryId) } : {};
+      const where = mainCategoryId ? { mainCategoryId: parseInt(mainCategoryId, 10) } : {};
 
+      // Fetch both the sub-categories and the total count in parallel
       const [subCategories, total] = await Promise.all([
         prisma.subCategory.findMany({
           where,
@@ -457,7 +481,7 @@ const categoryService = {
           include: {
             heroSection: {
               select: {
-              imageUrl: true,
+                imageUrl: true,
               }
             },
             mainCategory: true,
@@ -465,16 +489,75 @@ const categoryService = {
               include: {
                 listings: true
               }
-            }
+            },
+            miniSubCategory: true,
           }
         }),
         prisma.subCategory.count({ where })
       ]);
 
+      // Format the description for each sub-category
+      const formattedSubCategories = subCategories.map(subCategory => {
+        // Create a mutable copy to avoid modifying the original object directly
+        const modifiedSubCategory = { ...subCategory };
+        
+        if (modifiedSubCategory.description) {
+          try {
+            let descContent = '';
+            
+            // Extract content string from description object or convert if it's not an object
+            if (typeof modifiedSubCategory.description === 'object' && modifiedSubCategory.description !== null && modifiedSubCategory.description.content) {
+              descContent = modifiedSubCategory.description.content;
+            } else if (typeof modifiedSubCategory.description === 'object' && modifiedSubCategory.description !== null) {
+              // Fallback for objects without a 'content' property
+              descContent = JSON.stringify(modifiedSubCategory.description);
+            } else {
+              // Handle cases where it might already be a string or other primitive type
+              descContent = String(modifiedSubCategory.description);
+            }
+            
+            // Enhanced formatting for better mobile and web display
+            modifiedSubCategory.description = descContent
+              .replace(/\\n/g, '\n')           // Replace escaped newlines with actual newlines
+              .replace(/\n{3,}/g, '\n\n')      // Replace multiple consecutive newlines with double newlines
+              .replace(/\t/g, '    ')          // Replace tabs with 4 spaces for better alignment
+              .replace(/•\s*/g, '• ')          // Ensure bullet points have proper spacing
+              .replace(/^\s*•/gm, '• ')        // Fix bullet points at start of lines
+              .split('\n')                     // Split into lines
+              .map(line => {
+                const trimmed = line.trim();
+                // Preserve structure for headers and bullet points
+                if (trimmed.includes(':') && !trimmed.startsWith('•')) {
+                  return `\n${trimmed}\n`;     // Add spacing around headers
+                }
+                if (trimmed.startsWith('•')) {
+                  return `  ${trimmed}`;       // Indent bullet points
+                }
+                return trimmed;
+              })
+              .filter(line => line.length > 0) // Remove empty lines
+              .join('\n')                      // Join with single newlines
+              .replace(/\n{3,}/g, '\n\n')      // Clean up excessive newlines again
+              .replace(/^\n+|\n+$/g, '')       // Remove leading/trailing newlines
+              .trim();
+              
+          } catch (error) {
+            console.warn(`Failed to format description for subcategory ${modifiedSubCategory.id}:`, error.message);
+            // If formatting fails, set a default value
+            modifiedSubCategory.description = "Description not available.";
+          }
+        } else {
+          // If no description exists, provide a default value
+          modifiedSubCategory.description = "";
+        }
+        
+        return modifiedSubCategory;
+      });
+
       return {
         success: true,
         data: {
-          subCategories,
+          subCategories: formattedSubCategories,
           pagination: {
             page,
             limit,
@@ -484,227 +567,217 @@ const categoryService = {
         }
       };
     } catch (error) {
+      // Throw a structured application error for better error handling upstream
       throw new AppError(`Failed to fetch sub categories: ${error.message}`, 500);
     }
   },
 
-  // // Get sub category by ID
-  // async getSubCategoryById(id) {
-  //   try {
-  //     const subCategory = await prisma.subCategory.findUnique({
-  //       where: { id: parseInt(id) },
-  //       include: {
-  //         heroSection: {
-  //           select: {
-  //             imageUrl: true,
-  //           }
-  //         },
-  //         mainCategory: true,
-  //         specificCategories: {
-  //           include: {
-  //             listings: true
-  //           }
-  //         }
-  //       }
-  //     });
-
-  //     if (!subCategory) {
-  //       throw new AppError('Sub category not found', 404);
-  //     }
-
-  //     return {
-  //       success: true,
-  //       data: subCategory
-  //     };
-  //   } catch (error) {
-  //     throw new AppError(`Failed to fetch sub category: ${error.message}`, 500);
-  //   }
-  // },
-
-//  // Get all sub categories with individual WhatsApp links
-//   async getAllSubCategories(page = 1, limit = 10, mainCategoryId = null) {
-//     try {
-//       const skip = (page - 1) * limit;
-//       const where = mainCategoryId ? { mainCategoryId: parseInt(mainCategoryId) } : {};
-
-//       const [subCategories, total] = await Promise.all([
-//         prisma.subCategory.findMany({
-//           where,
-//           skip,
-//           take: limit,
-//           orderBy: { createdAt: 'desc' },
-//           include: {
-//             heroSection: {
-//               select: {
-//                 imageUrl: true,
-//               }
-//             },
-//             mainCategory: true,
-//             specificCategories: {
-//               include: {
-//                 listings: true
-//               }
-//             }
-//           }
-//         }),
-//         prisma.subCategory.count({ where })
-//       ]);
-
-//       // Add individual WhatsApp links to each sub category
-//       const subCategoriesWithWhatsApp = await Promise.all(
-//         subCategories.map(async (subCategory) => {
-//           if (subCategory.contractWhatsapp === true) {
-//             const adminWhatsApp = await this.getAdminWhatsAppForSubCategory(subCategory);
-//             return {
-//               ...subCategory,
-//               adminWhatsApp
-//             };
-//           }
-//           return subCategory;
-//         })
-//       );
-
-//       // Filter sub categories with contractWhatsapp: true
-//       const whatsappEnabledCategories = subCategoriesWithWhatsApp.filter(
-//         subCat => subCat.contractWhatsapp === true
-//       );
-
-//       return {
-//         success: true,
-//         data: {
-//           subCategories: subCategoriesWithWhatsApp,
-//           whatsappEnabledCategories,
-//           whatsappEnabledCount: whatsappEnabledCategories.length,
-//           pagination: {
-//             page,
-//             limit,
-//             total,
-//             pages: Math.ceil(total / limit)
-//           }
-//         }
-//       };
-//     } catch (error) {
-//       throw new AppError(`Failed to fetch sub categories: ${error.message}`, 500);
-//     }
-//   },
-
-
-  // Get sub category by ID with individual WhatsApp link
-  async getSubCategoryById(id) {
-    try {
-      const subCategory = await prisma.subCategory.findUnique({
-        where: { id: parseInt(id) },
-        include: {
-          heroSection: {
-            select: {
-              imageUrl: true,
-            }
-          },
-          mainCategory: true,
-          specificCategories: {
-            include: {
-              listings: true
-            }
+    // Get sub category by ID with individual WhatsApp link
+    async getSubCategoryById(id) {
+      try {
+        const subCategory = await prisma.subCategory.findUnique({
+          where: { id: parseInt(id) },
+          include: {
+            heroSection: {
+              select: {
+                imageUrl: true,
+              }
+            },
+            mainCategory: true,
+            specificCategories: {
+              include: {
+                listings: true
+              }
+            },
+            miniSubCategory: true // Include mini sub categories if needed
           }
+        });
+
+        if (!subCategory) {
+          throw new AppError('Sub category not found', 404);
         }
-      });
 
-      if (!subCategory) {
-        throw new AppError('Sub category not found', 404);
+        const result = {
+          success: true,
+          data: subCategory
+        };
+
+        // Add individual WhatsApp details if contractWhatsapp is true
+        if (subCategory.contractWhatsapp === true) {
+          result.data.adminWhatsApp = await this.getAdminWhatsAppForSubCategory(subCategory);
+        }
+
+        return result;
+      } catch (error) {
+        throw new AppError(`Failed to fetch sub category: ${error.message}`, 500);
       }
+    },
 
-      const result = {
-        success: true,
-        data: subCategory
-      };
+    // Get admin WhatsApp for individual sub category
+    async getAdminWhatsAppForSubCategory(subCategory) {
+      try {
+        // Get admin WhatsApp number
+        const adminWhatsApp = await this.getAdminWhatsAppNumber();
+        
+        // Create inquiry message for this specific category
+        const inquiryDetails = {
+          serviceName: subCategory.name,
+          serviceId: subCategory.id,
+          mainCategory: subCategory.mainCategory?.name,
+          description: subCategory.description,
+          listingsCount: subCategory.specificCategories?.reduce((total, spec) => 
+            total + (spec.listings?.length || 0), 0) || 0,
+          imageUrl: subCategory.heroSection?.imageUrl || subCategory.img,
+          specificCategories: subCategory.specificCategories?.map(spec => ({
+            name: spec.name,
+            listingsCount: spec.listings?.length || 0
+          })) || []
+        };
 
-      // Add individual WhatsApp details if contractWhatsapp is true
-      if (subCategory.contractWhatsapp === true) {
-        result.data.adminWhatsApp = await this.getAdminWhatsAppForSubCategory(subCategory);
+        return {
+          whatsapp: adminWhatsApp.whatsapp,
+          whatsappLink: adminWhatsApp.whatsappLink,
+          whatsappLinkWithInquiry: this.generateServiceInquiryLink(
+            adminWhatsApp.whatsapp, 
+            inquiryDetails
+          ),
+          mobileWhatsappLink: this.generateMobileWhatsAppLink(
+            adminWhatsApp.whatsapp,
+            inquiryDetails
+          ),
+          serviceName: subCategory.name,
+          message: `Service inquiry available for ${subCategory.name}`
+        };
+      } catch (error) {
+        throw new AppError(`Failed to get admin WhatsApp for category: ${error.message}`, 500);
       }
+    },
 
-      return result;
-    } catch (error) {
-      throw new AppError(`Failed to fetch sub category: ${error.message}`, 500);
-    }
-  },
-
-  // Get admin WhatsApp for individual sub category
-  async getAdminWhatsAppForSubCategory(subCategory) {
-    try {
-      // Get admin WhatsApp number
-      const adminWhatsApp = await this.getAdminWhatsAppNumber();
+    // Generate WhatsApp link with service inquiry message
+    generateServiceInquiryLink(phoneNumber, inquiryDetails) {
+      let cleanNumber = phoneNumber.replace(/[^\d+]/g, '');
       
-      // Create inquiry message for this specific category
-      const inquiryDetails = {
-        serviceName: subCategory.name,
-        serviceId: subCategory.id,
-        mainCategory: subCategory.mainCategory?.name,
-        description: subCategory.description,
-        listingsCount: subCategory.specificCategories?.reduce((total, spec) => 
-          total + (spec.listings?.length || 0), 0) || 0,
-        imageUrl: subCategory.heroSection?.imageUrl || subCategory.img,
-        specificCategories: subCategory.specificCategories?.map(spec => ({
-          name: spec.name,
-          listingsCount: spec.listings?.length || 0
-        })) || []
-      };
+      if (cleanNumber.startsWith('+')) {
+        cleanNumber = cleanNumber.substring(1);
+      }
+      
+      if (cleanNumber.length < 10) {
+        throw new Error('Invalid phone number format');
+      }
 
-      return {
-        whatsapp: adminWhatsApp.whatsapp,
-        whatsappLink: adminWhatsApp.whatsappLink,
-        whatsappLinkWithInquiry: this.generateServiceInquiryLink(
-          adminWhatsApp.whatsapp, 
-          inquiryDetails
-        ),
-        serviceName: subCategory.name,
-        message: `Service inquiry available for ${subCategory.name}`
-      };
-    } catch (error) {
-      throw new AppError(`Failed to get admin WhatsApp for category: ${error.message}`, 500);
-    }
-  },
+      const message = this.createServiceInquiryMessage(inquiryDetails);
+      const encodedMessage = encodeURIComponent(message);
+      return `https://wa.me/${cleanNumber}?text=${encodedMessage}`;
+    },
 
-  // Generate WhatsApp link with service inquiry message
-  generateServiceInquiryLink(phoneNumber, inquiryDetails) {
-    let cleanNumber = phoneNumber.replace(/[^\d+]/g, '');
-    
-    if (cleanNumber.startsWith('+')) {
-      cleanNumber = cleanNumber.substring(1);
-    }
-    
-    if (cleanNumber.length < 10) {
-      throw new Error('Invalid phone number format');
-    }
+    // Generate mobile WhatsApp link
+    generateMobileWhatsAppLink(phoneNumber, inquiryDetails) {
+      let cleanNumber = phoneNumber.replace(/[^\d+]/g, '');
+      
+      if (cleanNumber.startsWith('+')) {
+        cleanNumber = cleanNumber.substring(1);
+      }
+      
+      if (cleanNumber.length < 10) {
+        throw new Error('Invalid phone number format');
+      }
 
-    const message = this.createServiceInquiryMessage(inquiryDetails);
-    const encodedMessage = encodeURIComponent(message);
-    return `https://wa.me/${cleanNumber}?text=${encodedMessage}`;
-  },
+      const message = this.createServiceInquiryMessage(inquiryDetails);
+      const encodedMessage = encodeURIComponent(message);
+      return `whatsapp://send?phone=${cleanNumber}&text=${encodedMessage}`;
+    },
 
-  // Create beautiful service inquiry message
-  createServiceInquiryMessage(details) {
-    let message = `Hello Admin!\n\n`;
-    message += `SERVICE INQUIRY\n\n`;
-    
-    message += `Service Name: ${details.serviceName}\n\n`;
-   
-    
-    message += `\nINQUIRY PURPOSE:\n`;
-    message += `I'm interested in contract opportunities for this service.\n\n`;
-    
-    message += `QUESTIONS:\n`;
-    message += `- What contract services are available for this service?\n`;
-    message += `- What are the terms and pricing?\n`;
-    message += `- What are the requirements to get started?\n`;
-    message += `- How does the contract process work?\n`;
-    message += `- Are there any special offers or packages?\n\n`;
-    
-    message += `Please provide detailed information about contract opportunities for this service.\n\n`;
-    message += `Thank you for your time!`;
+    // Create beautiful service inquiry message
+    createServiceInquiryMessage(details) {
+      let message = `Hello Admin!\n\n`;
+      message += `SERVICE INQUIRY\n\n`;
+      
+      message += `Service Name: ${details.serviceName}\n`;
+      
+      // Add description if available - send line by line from JSON
+      if (details.description) {
+        let descriptionText = '';
+        try {
+          if (typeof details.description === 'object' && details.description !== null) {
+        // If it's already an object, extract content line by line
+        if (details.description.content) {
+          descriptionText = details.description.content;
+        } else {
+          // Convert object to readable format - handle nested objects properly
+          descriptionText = Object.entries(details.description)
+            .map(([key, value]) => {
+          if (typeof value === 'object' && value !== null) {
+            // Handle nested objects
+            const nestedContent = Object.entries(value)
+              .map(([nestedKey, nestedValue]) => `  ${nestedKey}: ${nestedValue}`)
+              .join('\n');
+            return `${key}:\n${nestedContent}`;
+          }
+          return `${key}: ${value}`;
+            })
+            .join('\n');
+        }
+          } else if (typeof details.description === 'string') {
+        // Try to parse as JSON first
+        try {
+          const parsed = JSON.parse(details.description);
+          if (parsed.content) {
+            descriptionText = parsed.content;
+          } else {
+            descriptionText = Object.entries(parsed)
+          .map(([key, value]) => {
+            if (typeof value === 'object' && value !== null) {
+              // Handle nested objects in parsed JSON
+              const nestedContent = Object.entries(value)
+            .map(([nestedKey, nestedValue]) => `  ${nestedKey}: ${nestedValue}`)
+            .join('\n');
+              return `${key}:\n${nestedContent}`;
+            }
+            return `${key}: ${value}`;
+          })
+          .join('\n');
+          }
+        } catch {
+          // If not valid JSON, use as plain text
+          descriptionText = details.description.trim();
+        }
+          } else {
+        descriptionText = String(details.description).trim();
+          }
+          
+          if (descriptionText) {
+        // Format description line by line
+        const formattedDescription = descriptionText
+          .replace(/\\n/g, '\n')
+          .split('\n')
+          .map(line => line.trim())
+          .filter(line => line.length > 0)
+          .join('\n');
+        
+        message += `Description:\n${formattedDescription}\n`;
+          }
+        } catch (error) {
+          // Fallback in case of any errors
+          console.warn('Error formatting description for WhatsApp message:', error);
+          message += `Description: Service details available\n`;
+        }
+      }
+      
+      message += `\nINQUIRY PURPOSE:\n`;
+      message += `I'm interested in contract opportunities for this service.\n\n`;
+      
+      message += `QUESTIONS:\n`;
+      message += `- What contract services are available for this service?\n`;
+      message += `- What are the terms and pricing?\n`;
+      message += `- What are the requirements to get started?\n`;
+      message += `- How does the contract process work?\n`;
+      message += `- Are there any special offers or packages?\n\n`;
+      
+      message += `Please provide detailed information about contract opportunities for this service.\n\n`;
+      message += `Thank you for your time!`;
 
-    return message;
-  },
+      return message;
+    },
 
   // Get admin WhatsApp number (reuse from previous service)
   async getAdminWhatsAppNumber() {
@@ -814,7 +887,7 @@ const categoryService = {
 
 async updateSubCategory(id, updateData, files) {
   try {
-    const { name, hasSpecificCategory, mainCategoryId, contractWhatsapp, hasForm, fromName } = updateData;
+    const { name, hasSpecificCategory, mainCategoryId, contractWhatsapp, hasForm, fromName, description } = updateData;
 
     // Check if sub category exists
     const existingSubCategory = await prisma.subCategory.findUnique({
@@ -869,7 +942,9 @@ async updateSubCategory(id, updateData, files) {
             ...(hasForm !== undefined && { 
               hasForm: hasForm === 'true' || hasForm === true 
             }),
-            ...(fromName !== undefined && { fromName })
+            ...(fromName !== undefined && { fromName }),
+    
+            ...(description && { description: typeof description === 'object' ? description : JSON.parse(description) })
           },
           include: {
             mainCategory: true,
@@ -1763,7 +1838,324 @@ async updateSubCategory(id, updateData, files) {
     } catch (error) {
       throw new AppError(`Failed to search categories: ${error.message}`, 500);
     }
-  }
+  },
+
+// ============ MINI SUB CATEGORY OPERATIONS ============
+
+
+async createMiniSubCategory(data, files) {
+    try {
+        const { name, subCategoryId, hasSpecificCategory: hasSpecificCategoryRaw = false, contractWhatsapp: contractWhatsappRaw = false, hasForm: hasFormRaw = false, fromName } = data;
+
+        if (!name || !subCategoryId) {
+            throw new AppError('Mini sub category name and parent sub category ID are required', 400);
+        }
+
+        // Check if parent sub category exists
+        const subCategory = await prisma.subCategory.findUnique({
+            where: { id: parseInt(subCategoryId) },
+        });
+
+        if (!subCategory) {
+            throw new AppError('Parent sub category not found', 404);
+        }
+
+        // Check if mini sub category already exists within the same parent
+        const existingMiniSubCategory = await prisma.miniSubCategory.findFirst({
+            where: {
+                name,
+                subCategoryId: parseInt(subCategoryId),
+            },
+        });
+
+        if (existingMiniSubCategory) {
+            throw new AppError('Mini sub category already exists in this sub category', 400);
+        }
+
+        // Return success immediately and handle DB creation/file upload in the background
+        setImmediate(async () => {
+            try {
+                // Convert string inputs to boolean
+                const hasSpecificCategory = hasSpecificCategoryRaw === 'true' || hasSpecificCategoryRaw === true;
+                const contractWhatsapp = contractWhatsappRaw === 'true' || contractWhatsappRaw === true;
+                const hasForm = hasFormRaw === 'true' || hasFormRaw === true;
+
+                // Create the mini sub category with image as null initially
+                const miniSubCategory = await prisma.miniSubCategory.create({
+                    data: {
+                        name,
+                        img: null,
+                        hasSpecificCategory,
+                        contractWhatsapp,
+                        hasForm,
+                        fromName: fromName || null,
+                        subCategoryId: parseInt(subCategoryId),
+                    }
+                });
+
+                console.log(`Mini sub category "${name}" created successfully with ID: ${miniSubCategory.id}`);
+
+                // Handle image upload if a file is provided
+                if (files?.image?.[0]) {
+                    try {
+                        validateImageFile(files.image[0]);
+                        const uploadResult = await uploadSingleImage(files.image[0]);
+
+                        // Update the record with the uploaded image URL
+                        await prisma.miniSubCategory.update({
+                            where: { id: miniSubCategory.id },
+                            data: { img: uploadResult.url },
+                        });
+
+                        console.log(`Image uploaded for mini sub category "${name}":`, uploadResult.url);
+                    } catch (uploadError) {
+                        console.error(`Image upload failed for mini sub category "${name}":`, uploadError.message);
+                    }
+                }
+            } catch (backgroundError) {
+                console.error(`Background processing failed for mini sub category "${name}":`, backgroundError.message);
+            }
+        });
+
+        return {
+            success: true,
+            message: 'Mini sub category creation initiated, processing in background',
+            data: {
+                subCategoryId: parseInt(subCategoryId),
+                subCategoryName: subCategory.name,
+                miniSubCategoryName: name,
+                hasFile: !!(files?.image?.[0])
+            }
+        };
+    } catch (error) {
+        throw new AppError(`Failed to initiate mini sub category creation: ${error.message}`, 400);
+    }
+},
+
+/**
+ * Retrieves all mini sub categories with pagination.
+ * @param {number} page - The current page number.
+ * @param {number} limit - The number of items per page.
+ * @param {number|null} subCategoryId - Optional parent sub category ID to filter by.
+ * @returns {Promise<object>} A list of mini sub categories and pagination details.
+ */
+async getAllMiniSubCategories(page = 1, limit = 10, subCategoryId = null) {
+    try {
+        const skip = (page - 1) * limit;
+        const where = subCategoryId ? { subCategoryId: parseInt(subCategoryId) } : {};
+
+        const [miniSubCategories, total] = await Promise.all([
+            prisma.miniSubCategory.findMany({
+                where,
+                skip,
+                take: limit,
+                orderBy: { createdAt: 'desc' },
+                include: {
+                    subCategory: {
+                        include: {
+                            mainCategory: true
+                        }
+                    }
+                }
+            }),
+            prisma.miniSubCategory.count({ where })
+        ]);
+
+        return {
+            success: true,
+            data: {
+                miniSubCategories,
+                pagination: {
+                    page,
+                    limit,
+                    total,
+                    pages: Math.ceil(total / limit)
+                }
+            }
+        };
+    } catch (error) {
+        throw new AppError(`Failed to fetch mini sub categories: ${error.message}`, 500);
+    }
+},
+
+/**
+ * Retrieves a single mini sub category by its ID.
+ * @param {string|number} id - The ID of the mini sub category.
+ * @returns {Promise<object>} The mini sub category data.
+ */
+async getMiniSubCategoryById(id) {
+    try {
+        const miniSubCategory = await prisma.miniSubCategory.findUnique({
+            where: { id: parseInt(id) },
+            include: {
+                subCategory: {
+                    include: {
+                        mainCategory: true
+                    }
+                }
+            }
+        });
+
+        if (!miniSubCategory) {
+            throw new AppError('Mini sub category not found', 404);
+        }
+
+        return {
+            success: true,
+            data: miniSubCategory
+        };
+    } catch (error) {
+        throw new AppError(`Failed to fetch mini sub category: ${error.message}`, 500);
+    }
+},
+
+/**
+ * Updates an existing mini sub category, with background processing for file operations.
+ * @param {string|number} id - The ID of the mini sub category to update.
+ * @param {object} updateData - The data to update.
+ * @param {object} files - The uploaded files for image replacement.
+ * @returns {Promise<object>} Confirmation message.
+ */
+async updateMiniSubCategory(id, updateData, files) {
+    try {
+        if (!updateData || typeof updateData !== 'object') {
+            throw new AppError('Update data for mini sub category is required', 400);
+        }
+        const { name, subCategoryId } = updateData;
+
+        // Check if the mini sub category exists
+        const existingMiniSubCategory = await prisma.miniSubCategory.findUnique({
+            where: { id: parseInt(id) },
+        });
+
+        if (!existingMiniSubCategory) {
+            throw new AppError('Mini sub category not found', 404);
+        }
+
+        // If name is being updated, check for duplicates in the target sub category
+        if (name) {
+            const targetSubCategoryId = subCategoryId || existingMiniSubCategory.subCategoryId;
+            const duplicateCheck = await prisma.miniSubCategory.findFirst({
+                where: {
+                    name,
+                    subCategoryId: parseInt(targetSubCategoryId),
+                    id: { not: parseInt(id) }
+                }
+            });
+            if (duplicateCheck) {
+                throw new AppError('A mini sub category with this name already exists in the target sub category', 400);
+            }
+        }
+
+        // Return success immediately and handle updates in the background
+        setImmediate(async () => {
+            try {
+                // Prepare data for update, converting string booleans to boolean
+                const dataToUpdate = {};
+                for (const key in updateData) {
+                    if (Object.hasOwnProperty.call(updateData, key)) {
+                        const value = updateData[key];
+                        if (['hasSpecificCategory', 'contractWhatsapp', 'hasForm'].includes(key)) {
+                            dataToUpdate[key] = value === 'true' || value === true;
+                        } else if (key === 'subCategoryId') {
+                            dataToUpdate[key] = parseInt(value);
+                        } else if (value !== undefined && value !== null) {
+                            dataToUpdate[key] = value;
+                        }
+                    }
+                }
+
+                // Update the database record
+                await prisma.miniSubCategory.update({
+                    where: { id: parseInt(id) },
+                    data: dataToUpdate,
+                });
+
+                console.log(`Mini sub category ID ${id} updated successfully.`);
+
+                // Handle image replacement if a new image is provided
+                if (files?.image?.[0]) {
+                    try {
+                        validateImageFile(files.image[0]);
+
+                        // Delete the old image if it exists
+                        if (existingMiniSubCategory.img) {
+                            const oldFilename = existingMiniSubCategory.img.split('/').pop();
+                            await deleteImage(oldFilename);
+                            console.log("Old mini sub category image deleted:", oldFilename);
+                        }
+
+                        // Upload the new image
+                        const uploadResult = await uploadSingleImage(files.image[0]);
+
+                        // Update the record with the new image URL
+                        await prisma.miniSubCategory.update({
+                            where: { id: parseInt(id) },
+                            data: { img: uploadResult.url }
+                        });
+                        console.log("Mini sub category image updated:", uploadResult.url);
+                    } catch (imageError) {
+                        console.error("Mini sub category image update failed:", imageError.message);
+                    }
+                }
+            } catch (backgroundError) {
+                console.error(`Background update failed for mini sub category ID ${id}:`, backgroundError.message);
+            }
+        });
+
+        return {
+            success: true,
+            message: 'Mini sub category update initiated, processing in background',
+        };
+    } catch (error) {
+        throw new AppError(`Failed to initiate mini sub category update: ${error.message}`, 400);
+    }
+},
+
+/**
+ * Deletes a mini sub category and its associated image.
+ * @param {string|number} id - The ID of the mini sub category to delete.
+ * @returns {Promise<object>} Confirmation message.
+ */
+async deleteMiniSubCategory(id) {
+    try {
+        // Find the category to ensure it exists and get its details
+        const miniSubCategory = await prisma.miniSubCategory.findUnique({
+            where: { id: parseInt(id) },
+        });
+
+        if (!miniSubCategory) {
+            throw new AppError('Mini sub category not found', 404);
+        }
+
+        // Delete the database record
+        await prisma.miniSubCategory.delete({
+            where: { id: parseInt(id) }
+        });
+
+        // Perform image cleanup in the background
+        setImmediate(async () => {
+            if (miniSubCategory.img) {
+                try {
+                    const filename = miniSubCategory.img.split('/').pop();
+                    await deleteImage(filename);
+                    console.log("Mini sub category image deleted:", filename);
+                } catch (deleteError) {
+                    console.warn("Failed to delete mini sub category image:", deleteError.message);
+                }
+            }
+            console.log(`Mini sub category "${miniSubCategory.name}" and its assets deleted successfully.`);
+        });
+
+        return {
+            success: true,
+            message: 'Mini sub category deleted successfully'
+        };
+    } catch (error) {
+        throw new AppError(`Failed to delete mini sub category: ${error.message}`, 400);
+    }
+},
+
 };
 
 export default categoryService;

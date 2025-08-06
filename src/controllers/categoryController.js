@@ -317,6 +317,58 @@ const categoryController = {
     } catch (error) {
       next(error);
     }
+  },
+
+
+  // ============ MINI SUB CATEGORY CONTROLLERS ============
+
+  async getAllMiniSubCategories(req, res, next) {
+    try {
+      const result = await categoryService.getAllMiniSubCategories();
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async getMiniSubCategoryById(req, res, next) {
+    try {
+      const { id } = req.params;
+      const result = await categoryService.getMiniSubCategoryById(id);
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async createMiniSubCategory(req, res, next) {
+    try {
+      const result = await categoryService.createMiniSubCategory(req.body, req.files);
+      res.status(201).json(result);
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async updateMiniSubCategory(req, res, next) {
+    try {
+      const { id } = req.params;
+      console.log("Updating mini sub category:", req.body, req.files);
+      const result = await categoryService.updateMiniSubCategory(id, req.body, req.files);
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async deleteMiniSubCategory(req, res, next) {
+    try {
+      const { id } = req.params;
+      const result = await categoryService.deleteMiniSubCategory(id);
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
   }
 };
 
