@@ -181,7 +181,7 @@
             console.log('Attempting to connect with:', authData);
 
             // Connect to Socket.IO server
-            socket = io('http://localhost:3000');
+            socket = io('https://backend-ab.mtscorporate.com');
 
             socket.on('connect', () => {
                 console.log('Socket connected successfully');
@@ -245,7 +245,7 @@
 
             socket.on('connect_error', (error) => {
                 console.error('❌ Connection error:', error);
-                alert('Failed to connect to server. Make sure the server is running on http://localhost:3000');
+                alert('Failed to connect to server. Make sure the server is running on https://backend-ab.mtscorporate.com');
                 updateStatus(false);
             });
         }
@@ -336,7 +336,7 @@
         // REST API calls for testing
         async function createTestNotification() {
             try {
-                const response = await fetch('http://localhost:3000/api/notifications/test/create', {
+                const response = await fetch('https://backend-ab.mtscorporate.com/api/notifications/test/create', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -358,7 +358,7 @@
 
         async function createAdminNotification() {
             try {
-                const response = await fetch('http://localhost:3000/api/notifications/test/create-for-admins', {
+                const response = await fetch('https://backend-ab.mtscorporate.com/api/notifications/test/create-for-admins', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -395,7 +395,7 @@
 
                 for (let i = 0; i < notifications.length; i++) {
                     const notif = notifications[i];
-                    await fetch('http://localhost:3000/api/notifications/test/create', {
+                    await fetch('https://backend-ab.mtscorporate.com/api/notifications/test/create', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',

@@ -283,3 +283,7 @@ model EventBooking {
   @@index([eventId])
   @@index([status])
 }
+
+
+
+
