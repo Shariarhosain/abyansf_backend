@@ -27,8 +27,17 @@ router.put('/read', notificationController.markAsRead);
 // Mark a specific notification as read by notification ID
 router.put('/read/:notificationId', notificationController.markSpecificNotificationAsRead);
 
-// Test endpoints (remove in production)
-router.post('/test/create', notificationController.createTestNotification);
-router.post('/test/create-for-admins', notificationController.createTestNotificationForAdmins);
+// Test endpoints (remove in production) - These don't require auth for easier testing
+router.post('/test/create', (req, res, next) => {
+    // Temporarily bypass auth for test endpoints
+    req.user = { userId: req.body.userId || 'test-user', role: req.body.role || 'USER' };
+    next();
+}, notificationController.createTestNotification);
+
+router.post('/test/create-for-admins', (req, res, next) => {
+    // Temporarily bypass auth for test endpoints
+    req.user = { userId: 'test-admin', role: 'ADMIN' };
+    next();
+}, notificationController.createTestNotificationForAdmins);
 
 export default router;

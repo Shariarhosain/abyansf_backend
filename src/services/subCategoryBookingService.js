@@ -189,7 +189,7 @@ async createRequest(requestDetails, userId) {
         );
 
         //admin notification
-        await notificationService.adminEmailNotification(
+        await notificationService.createNotificationForAdmins(
           `New Booking Request`,
           `A new booking request has been received for ${fullRequestDetails.subCategory?.name || fullRequestDetails.miniSubCategory?.name}.`,
         );
@@ -374,7 +374,7 @@ async  updateRequestStatus(id, updateData) {
         );
 
         // Optionally, notify the admin
-        await notificationService.adminEmailNotification(
+        await notificationService.createNotificationForAdmins(
           `New Booking Status Update`,
           `Booking ID: ${bookingId} has been updated to ${status}.`
         );

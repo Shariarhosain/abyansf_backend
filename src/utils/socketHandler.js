@@ -1,4 +1,8 @@
 import notificationService from '../services/notificationService.js';
+import jwt from 'jsonwebtoken';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 class SocketHandler {
   constructor(io) {
@@ -14,38 +18,116 @@ class SocketHandler {
       // Handle user authentication and room joining
       socket.on('authenticate', async (data) => {
         try {
-          const { userId, role } = data;
-          
-          if (!userId) {
+          const { token, userId, role } = data;
+          let authenticatedUserId = userId;
+          let authenticatedRole = role;
+
+          // Method 1: If token is provided, validate it and extract user info
+          if (token) {
+            try {
+              // Handle demo tokens for testing
+              if (token.startsWith('demo.')) {
+                const mockPayload = JSON.parse(atob(token.split('.')[1]));
+                authenticatedUserId = mockPayload.userId;
+                authenticatedRole = mockPayload.role;
+                console.log(`Demo token authentication: ${authenticatedUserId} - Role: ${authenticatedRole}`);
+              } else {
+                // Real JWT token validation
+                const decoded = jwt.verify(token, process.env.SECRET_CODE);
+                authenticatedUserId = decoded.userId || decoded.id;
+                
+                // Get user details from database to get the role
+                const user = await prisma.user.findUnique({
+                  where: { id: authenticatedUserId },
+                  select: { id: true, role: true, name: true, email: true }
+                });
+
+                if (!user) {
+                  socket.emit('error', { message: 'User not found' });
+                  return;
+                }
+
+                authenticatedRole = user.role;
+                console.log(`User authenticated via JWT: ${user.name} (${user.email}) - Role: ${user.role}`);
+              }
+            } catch (jwtError) {
+              socket.emit('error', { message: 'Invalid or expired token' });
+              return;
+            }
+          }
+          // Method 2: Direct userId and role (for testing or if you have other auth methods)
+          else if (userId && role) {
+            // For demo/testing purposes, allow any userId without database validation
+            if (userId.startsWith('demo') || userId.startsWith('test') || userId.startsWith('user')) {
+              authenticatedUserId = userId;
+              authenticatedRole = role;
+              console.log(`Demo user authentication: ${userId} - Role: ${role}`);
+            } else {
+              // Verify user exists in database for real users
+              const user = await prisma.user.findUnique({
+                where: { id: userId },
+                select: { id: true, role: true, name: true, email: true }
+              });
+
+              if (!user) {
+                socket.emit('error', { message: 'User not found in database. For testing, try a userId starting with "demo", "test", or "user"' });
+                return;
+              }
+
+              // Verify the role matches
+              if (user.role !== role) {
+                socket.emit('error', { message: 'Role mismatch' });
+                return;
+              }
+
+              authenticatedUserId = userId;
+              authenticatedRole = role;
+              
+              console.log(`User authenticated via direct credentials: ${user.name} (${user.email}) - Role: ${user.role}`);
+            }
+          }
+          else {
+            socket.emit('error', { message: 'Token or userId/role is required for authentication' });
+            return;
+          }
+
+          if (!authenticatedUserId) {
             socket.emit('error', { message: 'User ID is required for authentication' });
             return;
           }
 
           // Store user-socket mapping
-          if (!this.userSockets.has(userId)) {
-            this.userSockets.set(userId, new Set());
+          if (!this.userSockets.has(authenticatedUserId)) {
+            this.userSockets.set(authenticatedUserId, new Set());
           }
-          this.userSockets.get(userId).add(socket.id);
+          this.userSockets.get(authenticatedUserId).add(socket.id);
 
           // Join user-specific room
-          socket.join(`user_${userId}`);
+          socket.join(`user_${authenticatedUserId}`);
           
           // Join role-specific room
-          if (role === 'ADMIN') {
+          if (authenticatedRole === 'ADMIN') {
             socket.join('admins');
           } else {
             socket.join('users');
           }
 
           // Store user info in socket
-          socket.userId = userId;
-          socket.userRole = role;
+          socket.userId = authenticatedUserId;
+          socket.userRole = authenticatedRole;
 
           // Send current unread count
-          const unreadCount = await notificationService.getUnreadCount(userId);
+          const unreadCount = await notificationService.getUnreadCount(authenticatedUserId);
           socket.emit('unread_count_update', unreadCount);
 
-          console.log(`User ${userId} authenticated and joined rooms`);
+          // Send success authentication response
+          socket.emit('authenticated', { 
+            userId: authenticatedUserId, 
+            role: authenticatedRole,
+            message: 'Successfully authenticated'
+          });
+
+          console.log(`User ${authenticatedUserId} authenticated and joined rooms`);
         } catch (error) {
           console.error('Authentication error:', error);
           socket.emit('error', { message: 'Authentication failed' });

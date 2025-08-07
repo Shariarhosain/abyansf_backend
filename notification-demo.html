@@ -62,13 +62,37 @@
     
     <div class="controls">
         <h3>Authentication</h3>
-        <input type="text" id="userId" placeholder="User ID" value="user123">
-        <select id="userRole">
-            <option value="USER">USER</option>
-            <option value="ADMIN">ADMIN</option>
-        </select>
+        <div style="margin-bottom: 10px;">
+            <label>
+                <input type="radio" name="authMethod" value="jwt" checked>
+                Authenticate with JWT Token
+            </label>
+        </div>
+        <div style="margin-bottom: 10px;">
+            <label>
+                <input type="radio" name="authMethod" value="manual">
+                Manual Authentication (for testing)
+            </label>
+        </div>
+        
+        <div id="jwtAuth">
+            <input type="text" id="jwtToken" placeholder="JWT Token" style="width: 300px;">
+            <br><small>Paste your JWT token here. The server will extract userId and role automatically.</small>
+        </div>
+        
+        <div id="manualAuth" style="display: none;">
+            <input type="text" id="userId" placeholder="User ID" value="demo-user123">
+            <select id="userRole">
+                <option value="USER">USER</option>
+                <option value="ADMIN">ADMIN</option>
+            </select>
+            <br><small>For testing only - try demo-user123, test-user1, or user456</small>
+        </div>
+        
+        <br>
         <button onclick="authenticate()">Connect & Authenticate</button>
         <button onclick="disconnect()">Disconnect</button>
+        <button onclick="generateTestToken()">Generate Test JWT Token</button>
     </div>
 
     <div class="controls">
@@ -84,6 +108,7 @@
         <input type="text" id="testMessage" placeholder="Notification Message" value="This is a test message">
         <button onclick="createTestNotification()">Create Test Notification</button>
         <button onclick="createAdminNotification()">Create Admin Notification</button>
+        <button onclick="createMultipleTestNotifications()">Create 5 Test Notifications</button>
     </div>
 
     <div class="controls" id="adminControls" style="display: none;">
@@ -113,69 +138,138 @@
             }
         }
 
+        // Toggle auth method
+        document.querySelectorAll('input[name="authMethod"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                const jwtAuth = document.getElementById('jwtAuth');
+                const manualAuth = document.getElementById('manualAuth');
+                
+                if (this.value === 'jwt') {
+                    jwtAuth.style.display = 'block';
+                    manualAuth.style.display = 'none';
+                } else {
+                    jwtAuth.style.display = 'none';
+                    manualAuth.style.display = 'block';
+                }
+            });
+        });
+
         function authenticate() {
-            const userId = document.getElementById('userId').value;
-            const userRole = document.getElementById('userRole').value;
-            
-            if (!userId) {
-                alert('Please enter a User ID');
-                return;
+            const authMethod = document.querySelector('input[name="authMethod"]:checked').value;
+            let authData = {};
+
+            if (authMethod === 'jwt') {
+                const token = document.getElementById('jwtToken').value;
+                if (!token) {
+                    alert('Please enter a JWT token or switch to Manual Authentication for testing');
+                    return;
+                }
+                authData = { token };
+            } else {
+                const userId = document.getElementById('userId').value;
+                const userRole = document.getElementById('userRole').value;
+                
+                if (!userId) {
+                    alert('Please enter a User ID');
+                    return;
+                }
+                authData = { userId, role: userRole };
+                currentUserId = userId;
+                currentUserRole = userRole;
             }
 
-            currentUserId = userId;
-            currentUserRole = userRole;
+            console.log('Attempting to connect with:', authData);
 
             // Connect to Socket.IO server
             socket = io('http://localhost:3000');
 
             socket.on('connect', () => {
-                console.log('Connected to server');
+                console.log('Socket connected successfully');
                 
                 // Authenticate with the server
-                socket.emit('authenticate', {
-                    userId: currentUserId,
-                    role: currentUserRole
-                });
-                
+                socket.emit('authenticate', authData);
+                console.log('Authentication data sent:', authData);
+            });
+
+            socket.on('authenticated', (data) => {
+                console.log('✅ Authentication successful:', data);
+                currentUserId = data.userId;
+                currentUserRole = data.role;
                 updateStatus(true);
                 
                 // Show admin controls if user is admin
                 if (currentUserRole === 'ADMIN') {
                     document.getElementById('adminControls').style.display = 'block';
                 }
+                
+                // Automatically get initial unread count
+                setTimeout(() => {
+                    getUnreadCount();
+                }, 500);
             });
 
             socket.on('disconnect', () => {
-                console.log('Disconnected from server');
+                console.log('❌ Disconnected from server');
                 updateStatus(false);
             });
 
             socket.on('unread_count_update', (data) => {
-                console.log('Unread count update:', data);
+                console.log('📊 Unread count update:', data);
                 updateUnreadCount(data.unreadCount);
             });
 
             socket.on('new_notification', (notification) => {
-                console.log('New notification:', notification);
+                console.log('🔔 New notification:', notification);
                 addNotificationToUI(notification);
                 // Automatically get updated unread count
-                getUnreadCount();
+                setTimeout(() => {
+                    getUnreadCount();
+                }, 100);
             });
 
             socket.on('all_unread_counts_update', (counts) => {
-                console.log('All unread counts update:', counts);
+                console.log('📈 All unread counts update:', counts);
                 displayAllUserCounts(counts);
             });
 
             socket.on('admin_unread_counts_update', (counts) => {
-                console.log('Admin unread counts update:', counts);
+                console.log('👑 Admin unread counts update:', counts);
                 displayAllUserCounts(counts);
             });
 
             socket.on('error', (error) => {
-                console.error('Socket error:', error);
+                console.error('❌ Socket error:', error);
                 alert('Error: ' + error.message);
+                updateStatus(false);
             });
+
+            socket.on('connect_error', (error) => {
+                console.error('❌ Connection error:', error);
+                alert('Failed to connect to server. Make sure the server is running on http://localhost:3000');
+                updateStatus(false);
+            });
+        }
+
+        // Generate a test JWT token for demo purposes
+        function generateTestToken() {
+            const userId = document.getElementById('userId').value || 'demo-user123';
+            const userRole = document.getElementById('userRole').value || 'USER';
+            
+            // This is just for demo - in real app, you get token from login API
+            const payload = {
+                userId: userId,
+                role: userRole,
+                email: `${userId}@example.com`,
+                iat: Math.floor(Date.now() / 1000),
+                exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // 24 hours
+            };
+            
+            // Note: This is a mock token for demo only
+            // In real app, your backend creates the JWT token
+            const mockToken = 'demo.' + btoa(JSON.stringify(payload)) + '.signature';
+            document.getElementById('jwtToken').value = mockToken;
+            
+            alert('Demo token generated! In real app, you get this from your login API.');
         }
 
         function disconnect() {
@@ -277,8 +371,57 @@
                 
                 const result = await response.json();
                 console.log('Admin notifications created:', result);
+                alert('Admin notification created successfully!');
             } catch (error) {
                 console.error('Error creating admin notifications:', error);
+                alert('Error creating admin notification: ' + error.message);
+            }
+        }
+
+        async function createMultipleTestNotifications() {
+            if (!currentUserId) {
+                alert('Please authenticate first');
+                return;
+            }
+
+            try {
+                const notifications = [
+                    { title: 'Welcome!', message: 'Welcome to our platform!' },
+                    { title: 'New Feature', message: 'Check out our new notification system' },
+                    { title: 'Update Available', message: 'A new update is available for download' },
+                    { title: 'Reminder', message: 'Don\'t forget to check your profile' },
+                    { title: 'Achievement', message: 'You\'ve unlocked a new achievement!' }
+                ];
+
+                for (let i = 0; i < notifications.length; i++) {
+                    const notif = notifications[i];
+                    await fetch('http://localhost:3000/api/notifications/test/create', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            userId: currentUserId,
+                            title: notif.title,
+                            message: notif.message,
+                            role: currentUserRole
+                        })
+                    });
+                    
+                    // Small delay between requests
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                }
+                
+                alert('5 test notifications created! Check your unread count.');
+                
+                // Refresh unread count
+                setTimeout(() => {
+                    getUnreadCount();
+                }, 1000);
+                
+            } catch (error) {
+                console.error('Error creating multiple notifications:', error);
+                alert('Error creating notifications: ' + error.message);
             }
         }
     </script>
