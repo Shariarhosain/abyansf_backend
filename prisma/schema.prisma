@@ -169,9 +169,9 @@ model SpecificCategory {
 model Listing {
   id                            Int              @id @default(autoincrement())
   name                          String
-  main_image                    String
+  main_image                    String?
   sub_images                    String[]
-  location                      String
+  location                      String?
   member_privileges             String[]
   member_privileges_description String?
   description                   String?

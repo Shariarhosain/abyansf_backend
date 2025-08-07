@@ -1,7 +1,8 @@
 import { PrismaClient } from "@prisma/client";
 import { uploadSingleImage, validateImageFile, deleteImage } from '../utils/imghelper.js';
 import AppError from "../utils/error.js";
-
+import  dotenv from 'dotenv';
+dotenv.config();
 const prisma = new PrismaClient();
 // A helper function to extract filename from URL
 const getFilenameFromUrl = (url) => {
@@ -30,10 +31,12 @@ const listingService = {
 
         } = listingData;
 
-        // Validate required fields
-        if (!name || !location || !specificCategoryId) {
-            throw new AppError('Name, location, and specific category are required', 400);
-        }
+        console.log("Received listing data:", listingData);
+
+        // // Validate required fields
+        // if (!name || !location || !specificCategoryId) {
+        //     throw new AppError('Name, location, and specific category are required', 400);
+        // }
 
         // Verify specific category exists
         const specificCategory = await prisma.specificCategory.findUnique({
@@ -52,19 +55,21 @@ const listingService = {
                 name,
                 main_image: 'uploading...',
                 sub_images: [],
-                location,
-                member_privileges: Array.isArray(member_privileges) ? member_privileges : [member_privileges].filter(Boolean),
-                member_privileges_description,
-                description,
-                contractWhatsappBool,
+                location : location ? location : null,
+                member_privileges:  Array.isArray(member_privileges) ? member_privileges : [member_privileges].filter(Boolean) || [],
+                member_privileges_description: member_privileges_description ? member_privileges_description : null,
+                description: description ? description : null,
+                contractWhatsapp: contractWhatsappBool,
                 fromName: fromNameValue,
                 hasForm: hasFormBool,
-                hours: Array.isArray(hours) ? hours : [hours].filter(Boolean),
-                formName,
-                venueName: Array.isArray(venueName) ? venueName : [venueName].filter(Boolean),
-                specificCategoryId: parseInt(specificCategoryId),
-                menuImages,
-                typeofservice: Array.isArray(typeofservice) ? typeofservice : [typeofservice].filter(Boolean),
+                hours: Array.isArray(hours) ? hours : [hours].filter(Boolean) || [],
+                ...(formName !== undefined && { formName }),
+                venueName: Array.isArray(venueName) ? venueName : [venueName].filter(Boolean) || [],
+                specificCategory: {
+                    connect: { id: parseInt(specificCategoryId) }
+                },
+                ...(menuImages !== undefined && { menuImages }),
+                typeofservice: Array.isArray(typeofservice) ? typeofservice : [typeofservice].filter(Boolean) || [],
                 isActive: true // Default to active
             },
             include: {
@@ -266,6 +271,7 @@ const listingService = {
     };
   },
 
+  
   // Get listing by ID
   async getListingById(id) {
     const listing = await prisma.listing.findUnique({
@@ -351,13 +357,235 @@ const listingService = {
       }
     }
 
-    return {
+    const result = {
       ...listing,
       hours,
       venueName,
       typeofservice
     };
+
+    // Add individual WhatsApp details if contractWhatsapp is true
+    if (listing.contractWhatsapp === true) {
+      result.adminWhatsApp = await this.getAdminWhatsAppForListing(result);
+    }
+
+    return result;
   },
+
+  // Get admin WhatsApp for individual listing
+  async getAdminWhatsAppForListing(listing) {
+    try {
+      // Get admin WhatsApp number
+      const adminWhatsApp = await this.getAdminWhatsAppNumber();
+      
+      // Create inquiry message for this specific listing
+      const inquiryDetails = {
+        serviceName: listing.name,
+        serviceId: listing.id,
+        location: listing.location,
+        description: listing.description,
+        categoryName: listing.specificCategory?.name,
+        subCategoryName: listing.specificCategory?.subCategory?.name,
+        mainCategoryName: listing.specificCategory?.subCategory?.mainCategory?.name,
+        memberPrivileges: listing.member_privileges,
+        memberPrivilegesDescription: listing.member_privileges_description,
+        hours: listing.hours,
+        venueName: listing.venueName,
+        typeofservice: listing.typeofservice,
+        fromName: listing.fromName
+      };
+
+      return {
+        whatsapp: adminWhatsApp.whatsapp,
+        whatsappLink: adminWhatsApp.whatsappLink,
+        whatsappLinkWithInquiry: this.generateListingInquiryLink(
+          adminWhatsApp.whatsapp, 
+          inquiryDetails
+        ),
+        mobileWhatsappLink: this.generateMobileWhatsAppLinkForListing(
+          adminWhatsApp.whatsapp,
+          inquiryDetails
+        ),
+        serviceName: listing.name,
+        message: `Service inquiry available for ${listing.name}`
+      };
+    } catch (error) {
+      throw new AppError(`Failed to get admin WhatsApp for listing: ${error.message}`, 500);
+    }
+  },
+
+  // Generate WhatsApp link with listing inquiry message
+  generateListingInquiryLink(phoneNumber, inquiryDetails) {
+    let cleanNumber = phoneNumber.replace(/[^\d+]/g, '');
+    
+    if (cleanNumber.startsWith('+')) {
+      cleanNumber = cleanNumber.substring(1);
+    }
+    
+    if (cleanNumber.length < 10) {
+      throw new Error('Invalid phone number format');
+    }
+
+    const message = this.createListingInquiryMessage(inquiryDetails);
+    const encodedMessage = encodeURIComponent(message);
+    return `https://wa.me/${cleanNumber}?text=${encodedMessage}`;
+  },
+
+  // Generate mobile WhatsApp link for listing
+  generateMobileWhatsAppLinkForListing(phoneNumber, inquiryDetails) {
+    let cleanNumber = phoneNumber.replace(/[^\d+]/g, '');
+    
+    if (cleanNumber.startsWith('+')) {
+      cleanNumber = cleanNumber.substring(1);
+    }
+    
+    if (cleanNumber.length < 10) {
+      throw new Error('Invalid phone number format');
+    }
+
+    const message = this.createListingInquiryMessage(inquiryDetails);
+    const encodedMessage = encodeURIComponent(message);
+    return `whatsapp://send?phone=${cleanNumber}&text=${encodedMessage}`;
+  },
+
+  // Create beautiful listing inquiry message
+  createListingInquiryMessage(details) {
+    let message = `Hello Admin!\n\n`;
+    message += `SERVICE INQUIRY\n\n`;
+    
+    message += `Service Name: ${details.serviceName}\n`;
+    
+    if (details.location) {
+      message += `Location: ${details.location}\n`;
+    }
+
+    // Add description if available
+    if (details.description) {
+      let descriptionText = '';
+      try {
+        if (typeof details.description === 'object' && details.description !== null) {
+          if (details.description.content) {
+            descriptionText = details.description.content;
+          } else {
+            descriptionText = Object.entries(details.description)
+              .map(([key, value]) => {
+                if (typeof value === 'object' && value !== null) {
+                  const nestedContent = Object.entries(value)
+                    .map(([nestedKey, nestedValue]) => `  ${nestedKey}: ${nestedValue}`)
+                    .join('\n');
+                  return `${key}:\n${nestedContent}`;
+                }
+                return `${key}: ${value}`;
+              })
+              .join('\n');
+          }
+        } else if (typeof details.description === 'string') {
+          try {
+            const parsed = JSON.parse(details.description);
+            if (parsed.content) {
+              descriptionText = parsed.content;
+            } else {
+              descriptionText = Object.entries(parsed)
+                .map(([key, value]) => {
+                  if (typeof value === 'object' && value !== null) {
+                    const nestedContent = Object.entries(value)
+                      .map(([nestedKey, nestedValue]) => `  ${nestedKey}: ${nestedValue}`)
+                      .join('\n');
+                    return `${key}:\n${nestedContent}`;
+                  }
+                  return `${key}: ${value}`;
+                })
+                .join('\n');
+            }
+          } catch {
+            descriptionText = details.description.trim();
+          }
+        } else {
+          descriptionText = String(details.description).trim();
+        }
+        
+        if (descriptionText) {
+          const formattedDescription = descriptionText
+            .replace(/\\n/g, '\n')
+            .split('\n')
+            .map(line => line.trim())
+            .filter(line => line.length > 0)
+            .join('\n');
+          
+          message += `Description:\n${formattedDescription}\n`;
+        }
+      } catch (error) {
+        console.warn('Error formatting description for WhatsApp message:', error);
+        message += `Description: Service details available\n`;
+      }
+    }
+
+    if (details.categoryName) {
+      message += `Category: ${details.categoryName}\n`;
+    }
+
+    if (details.typeofservice && details.typeofservice.length > 0) {
+      message += `Service Type: ${details.typeofservice.join(', ')}\n`;
+    }
+
+    if (details.hours && details.hours.length > 0) {
+      message += `Operating Hours: ${details.hours.join(', ')}\n`;
+    }
+    
+    message += `\nINQUIRY PURPOSE:\n`;
+    message += `I'm interested in contract opportunities for this service.\n\n`;
+    
+    message += `QUESTIONS:\n`;
+    message += `- What contract services are available for this service?\n`;
+    message += `- What are the terms and pricing?\n`;
+    message += `- What are the requirements to get started?\n`;
+    message += `- How does the contract process work?\n`;
+    message += `- Are there any special offers or packages?\n\n`;
+    
+    message += `Please provide detailed information about contract opportunities for this service.\n\n`;
+    message += `Thank you for your time!`;
+
+    return message;
+  },
+
+  // Get admin WhatsApp number
+  async getAdminWhatsAppNumber() {
+    try {
+      const envWhatsApp = process.env.ADMIN_WHATSAPP_NUMBER;
+      let whatsappNumber;
+      
+      if (envWhatsApp) {
+        whatsappNumber = envWhatsApp;
+      } else {
+        const adminUser = await prisma.user.findFirst({
+          where: { role: "ADMIN" },
+          select: { whatsapp: true },
+        });
+        
+        if (!adminUser || !adminUser.whatsapp) {
+          throw new AppError("Admin WhatsApp number not found", 404);
+        }
+        
+        whatsappNumber = adminUser.whatsapp;
+      }
+
+      return {
+        whatsapp: whatsappNumber,
+        whatsappLink: this.generateBasicWhatsAppLink(whatsappNumber)
+      };
+    } catch (error) {
+      throw new AppError(`Failed to get admin WhatsApp: ${error.message}`, 500);
+    }
+  },
+
+  // Generate basic WhatsApp link
+  generateBasicWhatsAppLink(phoneNumber) {
+    const cleanNumber = phoneNumber.replace(/[^\d+]/g, '').replace('+', '');
+    return `https://wa.me/${cleanNumber}`;
+  },
+
+
+
 
   // Update listing
   async updateListing(id, updateData, files) {

@@ -48,7 +48,7 @@ const categoryService = {
   },
 
   // Get all main categories
-  async getAllMainCategories(page = 1, limit = 10) {
+  async getAllMainCategories(page = 1, limit = 100) {
     try {
       const skip = (page - 1) * limit;
 
@@ -60,7 +60,8 @@ const categoryService = {
           include: {
             subCategories: {
               include: {
-                specificCategories: true
+                specificCategories: true,
+                miniSubCategory: true
               }
             }
           }
