@@ -1,7 +1,11 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 import AppError from './utils/error.js';
+import SocketHandler from './utils/socketHandler.js';
+import notificationService from './services/notificationService.js';
 
 dotenv.config();
 
@@ -14,10 +18,27 @@ import subCategoryBookingRouter from './routes/subCategoryBookingRoute.js';
 import eventRouter from './routes/eventRoute.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 
-
-
 const app = express();
+const server = createServer(app);
 const PORT = process.env.PORT || 3000;
+
+// Initialize Socket.IO
+const io = new Server(server, {
+  cors: {
+    origin: '*', // Configure this properly for production
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    credentials: true,
+  }
+});
+
+// Initialize Socket Handler
+const socketHandler = new SocketHandler(io);
+
+// Inject socket handler into notification service
+notificationService.setSocketHandler(socketHandler);
+
+// Make socket handler available globally for other services
+app.set('socketHandler', socketHandler);
 
 // --- CRITICAL CONFIGURATION CHECKS ---
 let criticalConfigMissing = false;
@@ -83,8 +104,9 @@ app.use((err, req, res, next) => {
     });
 });
 // Start the server only if all critical checks passed
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`Socket.IO is ready for real-time notifications`);
 
   // You might also want to establish and check your database connection here
   // and potentially exit if it fails, or implement a retry mechanism.

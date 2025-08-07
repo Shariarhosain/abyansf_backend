@@ -177,6 +177,27 @@ const userService = {
           data: { isVerified: true },
         });
 
+ //find admin email
+        const adminUser = await prisma.user.findFirst({
+          where: { role: "ADMIN" },
+          select: { email: true, name: true },
+        });
+
+        /* // admin notify to send payment confirmation
+                    case 'admin_payment_confirmation':
+                        result = await userService.sendAdminPaymentConfirmation(task.email, task.name, task.userId, task.packageInfo);
+                        break; */
+ await publishToQueue("user_tasks", {
+          type: "admin_payment_confirmation",
+          email: adminUser.email,
+          name: user.name,
+          userId: user.id,
+        });
+         
+
+         
+        
+
         // Log action
         await this.createLog(
           user.id,

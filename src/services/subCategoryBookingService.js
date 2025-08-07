@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import AppError from "../utils/error.js";
 import publishToQueue from "../utils/publisher.js";
+import notificationService from "./notificationService.js";
 
 import dotenv from 'dotenv';
 dotenv.config();
@@ -179,6 +180,20 @@ async createRequest(requestDetails, userId) {
           adminEmail: adminEmail,
         });
       }
+
+      // Optionally, send a notification to the user
+        await notificationService.createNotification(
+          userId,
+          `Booking Request Received`,
+          `Your booking request has been received for ${fullRequestDetails.subCategory?.name || fullRequestDetails.miniSubCategory?.name}. We will process it shortly.`,
+        );
+
+        //admin notification
+        await notificationService.adminEmailNotification(
+          `New Booking Request`,
+          `A new booking request has been received for ${fullRequestDetails.subCategory?.name || fullRequestDetails.miniSubCategory?.name}.`,
+        );
+
     } catch (error) {
       console.error(`Failed to publish booking request tasks for booking ID ${request.id}:`, error);
     }
@@ -350,6 +365,20 @@ async  updateRequestStatus(id, updateData) {
           details: updatedRequest,
           userEmail: updatedRequest.user.email,
         });
+
+        // Optionally, send a notification to the user
+        await notificationService.createNotification(
+          updatedRequest.userId,
+          `Booking Status Updated`,
+          `Your booking request for ${updatedRequest.subCategory?.name || updatedRequest.miniSubCategory?.name} has been updated to ${status}.`,
+        );
+
+        // Optionally, notify the admin
+        await notificationService.adminEmailNotification(
+          `New Booking Status Update`,
+          `Booking ID: ${bookingId} has been updated to ${status}.`
+        );
+
         console.log(`Published status update for booking ID: ${bookingId}`);
       } catch (error) {
         console.error("Failed to publish status update task:", error);

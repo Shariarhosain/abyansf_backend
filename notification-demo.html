@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Notifications Demo</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .notification-count {
+            background: red;
+            color: white;
+            border-radius: 50%;
+            padding: 2px 6px;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        .notification {
+            background: #f0f0f0;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+        }
+        .notification.unread {
+            background: #e6f3ff;
+            border-left: 4px solid #007bff;
+        }
+        .controls {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+        .controls input, .controls button {
+            margin: 5px;
+            padding: 8px;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <h1>Real-time Notifications Demo</h1>
+    
+    <div id="status" class="status disconnected">Disconnected</div>
+    
+    <div class="controls">
+        <h3>Authentication</h3>
+        <input type="text" id="userId" placeholder="User ID" value="user123">
+        <select id="userRole">
+            <option value="USER">USER</option>
+            <option value="ADMIN">ADMIN</option>
+        </select>
+        <button onclick="authenticate()">Connect & Authenticate</button>
+        <button onclick="disconnect()">Disconnect</button>
+    </div>
+
+    <div class="controls">
+        <h3>Notification Counts</h3>
+        <p>Unread Count: <span id="unreadCount">0</span><span class="notification-count" id="countBadge">0</span></p>
+        <button onclick="getUnreadCount()">Refresh Unread Count</button>
+        <button onclick="markAllAsRead()">Mark All as Read</button>
+    </div>
+
+    <div class="controls">
+        <h3>Test Notifications (requires authentication)</h3>
+        <input type="text" id="testTitle" placeholder="Notification Title" value="Test Notification">
+        <input type="text" id="testMessage" placeholder="Notification Message" value="This is a test message">
+        <button onclick="createTestNotification()">Create Test Notification</button>
+        <button onclick="createAdminNotification()">Create Admin Notification</button>
+    </div>
+
+    <div class="controls" id="adminControls" style="display: none;">
+        <h3>Admin Features</h3>
+        <button onclick="getAllUnreadCounts()">Get All User Counts</button>
+        <div id="allUserCounts"></div>
+    </div>
+
+    <div>
+        <h3>Live Notifications</h3>
+        <div id="notifications"></div>
+    </div>
+
+    <script>
+        let socket = null;
+        let currentUserId = null;
+        let currentUserRole = null;
+
+        function updateStatus(connected) {
+            const statusEl = document.getElementById('status');
+            if (connected) {
+                statusEl.textContent = `Connected as ${currentUserId} (${currentUserRole})`;
+                statusEl.className = 'status connected';
+            } else {
+                statusEl.textContent = 'Disconnected';
+                statusEl.className = 'status disconnected';
+            }
+        }
+
+        function authenticate() {
+            const userId = document.getElementById('userId').value;
+            const userRole = document.getElementById('userRole').value;
+            
+            if (!userId) {
+                alert('Please enter a User ID');
+                return;
+            }
+
+            currentUserId = userId;
+            currentUserRole = userRole;
+
+            // Connect to Socket.IO server
+            socket = io('http://localhost:3000');
+
+            socket.on('connect', () => {
+                console.log('Connected to server');
+                
+                // Authenticate with the server
+                socket.emit('authenticate', {
+                    userId: currentUserId,
+                    role: currentUserRole
+                });
+                
+                updateStatus(true);
+                
+                // Show admin controls if user is admin
+                if (currentUserRole === 'ADMIN') {
+                    document.getElementById('adminControls').style.display = 'block';
+                }
+            });
+
+            socket.on('disconnect', () => {
+                console.log('Disconnected from server');
+                updateStatus(false);
+            });
+
+            socket.on('unread_count_update', (data) => {
+                console.log('Unread count update:', data);
+                updateUnreadCount(data.unreadCount);
+            });
+
+            socket.on('new_notification', (notification) => {
+                console.log('New notification:', notification);
+                addNotificationToUI(notification);
+                // Automatically get updated unread count
+                getUnreadCount();
+            });
+
+            socket.on('all_unread_counts_update', (counts) => {
+                console.log('All unread counts update:', counts);
+                displayAllUserCounts(counts);
+            });
+
+            socket.on('admin_unread_counts_update', (counts) => {
+                console.log('Admin unread counts update:', counts);
+                displayAllUserCounts(counts);
+            });
+
+            socket.on('error', (error) => {
+                console.error('Socket error:', error);
+                alert('Error: ' + error.message);
+            });
+        }
+
+        function disconnect() {
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+            }
+            currentUserId = null;
+            currentUserRole = null;
+            updateStatus(false);
+            document.getElementById('adminControls').style.display = 'none';
+        }
+
+        function updateUnreadCount(count) {
+            document.getElementById('unreadCount').textContent = count;
+            const badge = document.getElementById('countBadge');
+            badge.textContent = count;
+            badge.style.display = count > 0 ? 'inline' : 'none';
+        }
+
+        function addNotificationToUI(notification) {
+            const notificationsDiv = document.getElementById('notifications');
+            const notificationEl = document.createElement('div');
+            notificationEl.className = 'notification unread';
+            notificationEl.innerHTML = `
+                <strong>${notification.title}</strong>
+                <p>${notification.message}</p>
+                <small>Role: ${notification.role} | ${new Date(notification.createdAt).toLocaleString()}</small>
+            `;
+            notificationsDiv.insertBefore(notificationEl, notificationsDiv.firstChild);
+        }
+
+        function getUnreadCount() {
+            if (socket) {
+                socket.emit('get_unread_count');
+            }
+        }
+
+        function markAllAsRead() {
+            if (socket) {
+                socket.emit('mark_notification_read', {});
+            }
+        }
+
+        function getAllUnreadCounts() {
+            if (socket && currentUserRole === 'ADMIN') {
+                socket.emit('get_all_unread_counts');
+            }
+        }
+
+        function displayAllUserCounts(counts) {
+            const countsDiv = document.getElementById('allUserCounts');
+            countsDiv.innerHTML = '<h4>All User Unread Counts:</h4>';
+            counts.forEach(userCount => {
+                const userEl = document.createElement('div');
+                userEl.innerHTML = `
+                    <p><strong>${userCount.userName}</strong> (${userCount.userEmail}) - 
+                    Role: ${userCount.userRole} - Unread: ${userCount.unreadCount}</p>
+                `;
+                countsDiv.appendChild(userEl);
+            });
+        }
+
+        // REST API calls for testing
+        async function createTestNotification() {
+            try {
+                const response = await fetch('http://localhost:3000/api/notifications/test/create', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        userId: currentUserId,
+                        title: document.getElementById('testTitle').value,
+                        message: document.getElementById('testMessage').value,
+                        role: currentUserRole
+                    })
+                });
+                
+                const result = await response.json();
+                console.log('Test notification created:', result);
+            } catch (error) {
+                console.error('Error creating test notification:', error);
+            }
+        }
+
+        async function createAdminNotification() {
+            try {
+                const response = await fetch('http://localhost:3000/api/notifications/test/create-for-admins', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        title: document.getElementById('testTitle').value,
+                        message: document.getElementById('testMessage').value
+                    })
+                });
+                
+                const result = await response.json();
+                console.log('Admin notifications created:', result);
+            } catch (error) {
+                console.error('Error creating admin notifications:', error);
+            }
+        }
+    </script>
+</body>
+</html>
