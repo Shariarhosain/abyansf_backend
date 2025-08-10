@@ -1,0 +1,261 @@
+{
+  "info": {
+    "name": "Highlight API Tests",
+    "description": "API endpoints for testing the Highlight model",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/api/highlights",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "your_jwt_token_here",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Get All Highlights",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}?page=1&limit=10",
+          "host": ["{{baseUrl}}"],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "10"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get Highlights by Type - SUBCATEGORY",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/type/SUBCATEGORY",
+          "host": ["{{baseUrl}}"],
+          "path": ["type", "SUBCATEGORY"]
+        }
+      }
+    },
+    {
+      "name": "Get Highlights by Type - MINI_CATEGORY",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/type/MINI_CATEGORY",
+          "host": ["{{baseUrl}}"],
+          "path": ["type", "MINI_CATEGORY"]
+        }
+      }
+    },
+    {
+      "name": "Get Highlights by Type - LISTING",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/type/LISTING",
+          "host": ["{{baseUrl}}"],
+          "path": ["type", "LISTING"]
+        }
+      }
+    },
+    {
+      "name": "Get Highlight by ID",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/1",
+          "host": ["{{baseUrl}}"],
+          "path": ["1"]
+        }
+      }
+    },
+    {
+      "name": "Create SubCategory Highlight",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"SUBCATEGORY\",\n  \"subCategoryId\": 1,\n  \"priority\": 5,\n  \"isActive\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}",
+          "host": ["{{baseUrl}}"]
+        }
+      }
+    },
+    {
+      "name": "Create MiniSubCategory Highlight",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"MINI_CATEGORY\",\n  \"miniSubCategoryId\": 1,\n  \"priority\": 3,\n  \"isActive\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}",
+          "host": ["{{baseUrl}}"]
+        }
+      }
+    },
+    {
+      "name": "Create Listing Highlight",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"LISTING\",\n  \"listingId\": 1,\n  \"priority\": 10,\n  \"isActive\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}",
+          "host": ["{{baseUrl}}"]
+        }
+      }
+    },
+    {
+      "name": "Update Highlight",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"SUBCATEGORY\",\n  \"subCategoryId\": 2,\n  \"priority\": 8,\n  \"isActive\": false\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/1",
+          "host": ["{{baseUrl}}"],
+          "path": ["1"]
+        }
+      }
+    },
+    {
+      "name": "Toggle Highlight Status",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/1/toggle-status",
+          "host": ["{{baseUrl}}"],
+          "path": ["1", "toggle-status"]
+        }
+      }
+    },
+    {
+      "name": "Delete Highlight",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/1",
+          "host": ["{{baseUrl}}"],
+          "path": ["1"]
+        }
+      }
+    }
+  ]
+}

@@ -175,7 +175,7 @@ const listingService = {
         where,
         skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: 'asc' },
         include: {
           specificCategory: {
             include: {

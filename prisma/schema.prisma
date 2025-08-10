@@ -124,6 +124,7 @@ model SubCategory {
   specificCategories  SpecificCategory[]
   mainCategory        MainCategory       @relation(fields: [mainCategoryId], references: [id], onDelete: Cascade)
   subCategoryBookings subCategoryBooking[]
+  highlights          Highlight[]
 
   @@unique([mainCategoryId, name])
   @@index([mainCategoryId])
@@ -144,6 +145,7 @@ model MiniSubCategory {
   hasForm       Boolean @default(false)   
  subCategory   SubCategory @relation(fields: [subCategoryId], references: [id])
  subCategoryBookings subCategoryBooking[]
+ highlights    Highlight[]
   
   @@unique([subCategoryId, name])
   @@index([subCategoryId])
@@ -190,6 +192,7 @@ model Listing {
   hasForm                       Boolean          @default(false)
   specificCategory              SpecificCategory @relation(fields: [specificCategoryId], references: [id], onDelete: Cascade)
   bookings                      listingBooking[]
+  highlights                    Highlight[]
   
   @@index([specificCategoryId])
   @@index([isActive])
@@ -282,6 +285,37 @@ model EventBooking {
   @@index([userId])
   @@index([eventId])
   @@index([status])
+}
+
+model Highlight {
+  id              Int       @id @default(autoincrement())
+  isActive        Boolean   @default(true)
+  priority        Int       @default(0)
+  type            HighlightType
+  subCategoryId   Int?
+  miniSubCategoryId Int?
+  listingId       Int?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Relations
+  subCategory     SubCategory?     @relation(fields: [subCategoryId], references: [id], onDelete: Cascade)
+  miniSubCategory MiniSubCategory? @relation(fields: [miniSubCategoryId], references: [id], onDelete: Cascade)
+  listing         Listing?         @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  
+  @@index([isActive])
+  @@index([priority])
+  @@index([type])
+  @@index([subCategoryId])
+  @@index([miniSubCategoryId])
+  @@index([listingId])
+  @@index([createdAt])
+}
+
+enum HighlightType {
+  SUBCATEGORY
+  MINI_CATEGORY
+  LISTING
 }
 
 

@@ -56,7 +56,7 @@ const categoryService = {
         prisma.mainCategory.findMany({
           skip,
           take: limit,
-          orderBy: { createdAt: 'desc' },
+          orderBy: { createdAt: 'asc' },
           include: {
             subCategories: {
               include: {
@@ -478,7 +478,7 @@ const categoryService = {
           where,
           skip,
           take: limit,
-          orderBy: { createdAt: 'desc' },
+          orderBy: { createdAt: 'asc' },
           include: {
             heroSection: {
               select: {
@@ -497,68 +497,11 @@ const categoryService = {
         prisma.subCategory.count({ where })
       ]);
 
-      // Format the description for each sub-category
-      const formattedSubCategories = subCategories.map(subCategory => {
-        // Create a mutable copy to avoid modifying the original object directly
-        const modifiedSubCategory = { ...subCategory };
-        
-        if (modifiedSubCategory.description) {
-          try {
-            let descContent = '';
-            
-            // Extract content string from description object or convert if it's not an object
-            if (typeof modifiedSubCategory.description === 'object' && modifiedSubCategory.description !== null && modifiedSubCategory.description.content) {
-              descContent = modifiedSubCategory.description.content;
-            } else if (typeof modifiedSubCategory.description === 'object' && modifiedSubCategory.description !== null) {
-              // Fallback for objects without a 'content' property
-              descContent = JSON.stringify(modifiedSubCategory.description);
-            } else {
-              // Handle cases where it might already be a string or other primitive type
-              descContent = String(modifiedSubCategory.description);
-            }
-            
-            // Enhanced formatting for better mobile and web display
-            modifiedSubCategory.description = descContent
-              .replace(/\\n/g, '\n')           // Replace escaped newlines with actual newlines
-              .replace(/\n{3,}/g, '\n\n')      // Replace multiple consecutive newlines with double newlines
-              .replace(/\t/g, '    ')          // Replace tabs with 4 spaces for better alignment
-              .replace(/•\s*/g, '• ')          // Ensure bullet points have proper spacing
-              .replace(/^\s*•/gm, '• ')        // Fix bullet points at start of lines
-              .split('\n')                     // Split into lines
-              .map(line => {
-                const trimmed = line.trim();
-                // Preserve structure for headers and bullet points
-                if (trimmed.includes(':') && !trimmed.startsWith('•')) {
-                  return `\n${trimmed}\n`;     // Add spacing around headers
-                }
-                if (trimmed.startsWith('•')) {
-                  return `  ${trimmed}`;       // Indent bullet points
-                }
-                return trimmed;
-              })
-              .filter(line => line.length > 0) // Remove empty lines
-              .join('\n')                      // Join with single newlines
-              .replace(/\n{3,}/g, '\n\n')      // Clean up excessive newlines again
-              .replace(/^\n+|\n+$/g, '')       // Remove leading/trailing newlines
-              .trim();
-              
-          } catch (error) {
-            console.warn(`Failed to format description for subcategory ${modifiedSubCategory.id}:`, error.message);
-            // If formatting fails, set a default value
-            modifiedSubCategory.description = "Description not available.";
-          }
-        } else {
-          // If no description exists, provide a default value
-          modifiedSubCategory.description = "";
-        }
-        
-        return modifiedSubCategory;
-      });
-
+      // Return the sub-categories without modifying the description
       return {
         success: true,
         data: {
-          subCategories: formattedSubCategories,
+          subCategories,
           pagination: {
             page,
             limit,
@@ -885,156 +828,189 @@ const categoryService = {
 
 
 
+  async updateSubCategory(id, updateData, files) {
+    try {
+      const { name, hasSpecificCategory, mainCategoryId, contractWhatsapp, hasForm, fromName, description } = updateData;
 
-async updateSubCategory(id, updateData, files) {
-  try {
-    const { name, hasSpecificCategory, mainCategoryId, contractWhatsapp, hasForm, fromName, description } = updateData;
-
-    // Check if sub category exists
-    const existingSubCategory = await prisma.subCategory.findUnique({
-      where: { id: parseInt(id) },
-      include: { heroSection: true }
-    });
-
-    if (!existingSubCategory) {
-      throw new AppError('Sub category not found', 404);
-    }
-
-    // Check if main category exists (if being updated)
-    if (mainCategoryId) {
-      const mainCategory = await prisma.mainCategory.findUnique({
-        where: { id: parseInt(mainCategoryId) }
+      // Check if sub category exists
+      const existingSubCategory = await prisma.subCategory.findUnique({
+        where: { id: parseInt(id) },
+        include: { heroSection: true }
       });
-      if (!mainCategory) {
-        throw new AppError('Main category not found', 404);
-      }
-    }
 
-    // Check for duplicate name in the same main category
-    if (name) {
-      const targetMainCategoryId = mainCategoryId || existingSubCategory.mainCategoryId;
-      const duplicateCheck = await prisma.subCategory.findFirst({
-        where: {
-          name,
-          mainCategoryId: parseInt(targetMainCategoryId),
-          id: { not: parseInt(id) }
+      if (!existingSubCategory) {
+        throw new AppError('Sub category not found', 404);
+      }
+
+      // Check if main category exists (if being updated)
+      if (mainCategoryId) {
+        const mainCategory = await prisma.mainCategory.findUnique({
+          where: { id: parseInt(mainCategoryId) }
+        });
+        if (!mainCategory) {
+          throw new AppError('Main category not found', 404);
         }
-      });
-      if (duplicateCheck) {
-        throw new AppError('Sub category name already exists in this main category', 400);
       }
-    }
 
-    // Return success immediately and handle all processing in background
-    setImmediate(async () => {
-      try {
-        // Update sub category data
-       await prisma.subCategory.update({
-          where: { id: parseInt(id) },
-          data: {
-            ...(name && { name }),
-            ...(hasSpecificCategory !== undefined && {
-              hasSpecificCategory: hasSpecificCategory === 'true' || hasSpecificCategory === true
-            }),
-            ...(mainCategoryId && { mainCategoryId: parseInt(mainCategoryId) }),
-            ...(contractWhatsapp !== undefined && { 
-              contractWhatsapp: contractWhatsapp === 'true' || contractWhatsapp === true 
-            }),
-            ...(hasForm !== undefined && { 
-              hasForm: hasForm === 'true' || hasForm === true 
-            }),
-            ...(fromName !== undefined && { fromName }),
-    
-            ...(description && { description: typeof description === 'object' ? description : JSON.parse(description) })
-          },
-          include: {
-            mainCategory: true,
-            specificCategories: true,
-            heroSection: true
+      // Check for duplicate name in the same main category
+      if (name) {
+        const targetMainCategoryId = mainCategoryId || existingSubCategory.mainCategoryId;
+        const duplicateCheck = await prisma.subCategory.findFirst({
+          where: {
+            name,
+            mainCategoryId: parseInt(targetMainCategoryId),
+            id: { not: parseInt(id) }
           }
         });
-
-        console.log(`Sub category "${existingSubCategory.name}" updated successfully`);
-
-        // Handle sub category image update
-        if (files?.image?.[0]) {
-          try {
-            validateImageFile(files.image[0]);
-
-            // Delete old sub category image if exists
-            if (existingSubCategory.img) {
-              try {
-                const oldFilename = existingSubCategory.img.split('/').pop();
-                await deleteImage(oldFilename);
-                console.log("Old sub category image deleted:", oldFilename);
-              } catch (deleteError) {
-                console.warn("Failed to delete old sub category image:", deleteError.message);
-              }
-            }
-
-            // Upload new sub category image
-            const uploadResult = await uploadSingleImage(files.image[0]);
-            
-            // Update sub category with new image URL
-            await prisma.subCategory.update({
-              where: { id: parseInt(id) },
-              data: { img: uploadResult.url }
-            });
-
-            console.log("Sub category image updated:", uploadResult.url);
-          } catch (imageError) {
-            console.error("Sub category image update failed:", imageError.message);
-          }
+        if (duplicateCheck) {
+          throw new AppError('Sub category name already exists in this main category', 400);
         }
-
-        // Handle hero image update
-        if (files?.heroImage?.[0]) {
-          try {
-            validateImageFile(files.heroImage[0]);
-
-            // Delete old hero image if exists
-            if (existingSubCategory.heroSection?.imageUrl) {
-              try {
-                const oldFilename = existingSubCategory.heroSection.imageUrl.split('/').pop();
-                await deleteImage(oldFilename);
-                console.log("Old hero image deleted:", oldFilename);
-              } catch (deleteError) {
-                console.warn("Failed to delete old hero image:", deleteError.message);
-              }
-            }
-
-            // Upload new hero image
-            const uploadResult = await uploadSingleImage(files.heroImage[0]);
-            
-            // Update or create hero section
-            await prisma.heroSection.upsert({
-              where: { subCategoryId: parseInt(id) },
-              update: { imageUrl: uploadResult.url },
-              create: {
-                imageUrl: uploadResult.url,
-                subCategoryId: parseInt(id)
-              }
-            });
-
-            console.log("Hero image updated:", uploadResult.url);
-          } catch (heroError) {
-            console.error("Hero image update failed:", heroError.message);
-          }
-        }
-
-      } catch (backgroundError) {
-        console.error("Background processing failed:", backgroundError.message);
       }
-    });
 
-    return {
-      success: true,
-      message: 'Sub category update initiated, processing in background',
-    };
-  } catch (error) {
-    throw new AppError(`Failed to initiate sub category update: ${error.message}`, 400);
-  }
-},
+      // Return success immediately and handle all processing in background
+      setImmediate(async () => {
+        try {
+          // Format description properly
+          let formattedDescription = null;
+          if (description) {
+            try {
+              // If description is already an object, use it directly
+              if (typeof description === 'object') {
+                formattedDescription = description;
+              } else if (typeof description === 'string') {
+                // Clean up the string and format as proper JSON
+                const cleanedDescription = description.trim();
+                
+                // Check if it's wrapped in braces and remove them
+                let contentToProcess = cleanedDescription;
+                if (contentToProcess.startsWith('{') && contentToProcess.endsWith('}')) {
+                  contentToProcess = contentToProcess.slice(1, -1).trim();
+                }
+                
+                // Split by lines and format properly
+                const lines = contentToProcess
+                  .split('\n')
+                  .map(line => line.trim())
+                  .filter(line => line.length > 0);
+                
+                // Create structured description object
+                formattedDescription = {
+                  content: lines.join('\n'),
+                  sections: lines
+                };
+              }
+            } catch (jsonError) {
+              console.warn('Failed to format description, using plain text:', jsonError.message);
+              formattedDescription = { content: String(description).trim() };
+            }
+          }
+
+          // Update sub category data
+          await prisma.subCategory.update({
+            where: { id: parseInt(id) },
+            data: {
+              ...(name && { name }),
+              ...(hasSpecificCategory !== undefined && {
+                hasSpecificCategory: hasSpecificCategory === 'true' || hasSpecificCategory === true
+              }),
+              ...(mainCategoryId && { mainCategoryId: parseInt(mainCategoryId) }),
+              ...(contractWhatsapp !== undefined && { 
+                contractWhatsapp: contractWhatsapp === 'true' || contractWhatsapp === true 
+              }),
+              ...(hasForm !== undefined && { 
+                hasForm: hasForm === 'true' || hasForm === true 
+              }),
+              ...(fromName !== undefined && { fromName }),
+              ...(formattedDescription && { description: formattedDescription })
+            },
+            include: {
+              mainCategory: true,
+              specificCategories: true,
+              heroSection: true
+            }
+          });
+
+          console.log(`Sub category "${existingSubCategory.name}" updated successfully`);
+
+          // Handle sub category image update
+          if (files?.image?.[0]) {
+            try {
+              validateImageFile(files.image[0]);
+
+              // Delete old sub category image if exists
+              if (existingSubCategory.img) {
+                try {
+                  const oldFilename = existingSubCategory.img.split('/').pop();
+                  await deleteImage(oldFilename);
+                  console.log("Old sub category image deleted:", oldFilename);
+                } catch (deleteError) {
+                  console.warn("Failed to delete old sub category image:", deleteError.message);
+                }
+              }
+
+              // Upload new sub category image
+              const uploadResult = await uploadSingleImage(files.image[0]);
+              
+              // Update sub category with new image URL
+              await prisma.subCategory.update({
+                where: { id: parseInt(id) },
+                data: { img: uploadResult.url }
+              });
+
+              console.log("Sub category image updated:", uploadResult.url);
+            } catch (imageError) {
+              console.error("Sub category image update failed:", imageError.message);
+            }
+          }
+
+          // Handle hero image update
+          if (files?.heroImage?.[0]) {
+            try {
+              validateImageFile(files.heroImage[0]);
+
+              // Delete old hero image if exists
+              if (existingSubCategory.heroSection?.imageUrl) {
+                try {
+                  const oldFilename = existingSubCategory.heroSection.imageUrl.split('/').pop();
+                  await deleteImage(oldFilename);
+                  console.log("Old hero image deleted:", oldFilename);
+                } catch (deleteError) {
+                  console.warn("Failed to delete old hero image:", deleteError.message);
+                }
+              }
+
+              // Upload new hero image
+              const uploadResult = await uploadSingleImage(files.heroImage[0]);
+              
+              // Update or create hero section
+              await prisma.heroSection.upsert({
+                where: { subCategoryId: parseInt(id) },
+                update: { imageUrl: uploadResult.url },
+                create: {
+                  imageUrl: uploadResult.url,
+                  subCategoryId: parseInt(id)
+                }
+              });
+
+              console.log("Hero image updated:", uploadResult.url);
+            } catch (heroError) {
+              console.error("Hero image update failed:", heroError.message);
+            }
+          }
+
+        } catch (backgroundError) {
+          console.error("Background processing failed:", backgroundError.message);
+        }
+      });
+
+      return {
+        success: true,
+        message: 'Sub category update initiated, processing in background',
+      };
+    } catch (error) {
+      throw new AppError(`Failed to initiate sub category update: ${error.message}`, 400);
+    }
+  },
 
 
   // Delete sub category with image cleanup
@@ -1546,7 +1522,7 @@ async updateSubCategory(id, updateData, files) {
             }
           }
         },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: 'asc' }
       });
 
       return {
@@ -1950,7 +1926,7 @@ async getAllMiniSubCategories(page = 1, limit = 10, subCategoryId = null) {
                 where,
                 skip,
                 take: limit,
-                orderBy: { createdAt: 'desc' },
+                orderBy: { createdAt: 'ase' },
                 include: {
                     subCategory: {
                         include: {

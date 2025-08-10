@@ -17,6 +17,7 @@ import listingBookingRouter from './routes/listingBookingRoutes.js';
 import subCategoryBookingRouter from './routes/subCategoryBookingRoute.js';
 import eventRouter from './routes/eventRoute.js';
 import notificationRoutes from './routes/notificationRoutes.js';
+import highlightRouter from './routes/highlightRoute.js';
 
 const app = express();
 const server = createServer(app);
@@ -80,6 +81,7 @@ app.use('/api/bookings', listingBookingRouter);
 app.use('/api/sub-category-bookings', subCategoryBookingRouter);
 app.use('/api/events', eventRouter);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/highlights', highlightRouter);
 
 
 // if other  mean which i not declare then say hi hackers
