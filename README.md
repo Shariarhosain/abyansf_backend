@@ -1641,7 +1641,7 @@ For support and questions:
 
 - **Documentation**: Check the `/docs` folder
 - **Issues**: Create a GitHub issue
-- **Email**: support@abyansf.com
+- **Email**: shariarhosain131529@gmail.com
 
 ## 📄 License
 
@@ -1649,4 +1649,4 @@ This project is licensed under the ISC License - see the LICENSE file for detail
 
 ---
 
-Made with ❤️ by the Abyansf Team
+Made with ❤️ by the MTS Developer(Sanny)
