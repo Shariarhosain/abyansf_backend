@@ -257,7 +257,7 @@ graph TB
     subgraph "Data Storage"
         PostgreSQL[(🗄️ PostgreSQL<br/>Primary Database<br/>Users, Bookings, etc.)]
         Redis[(⚡ Redis<br/>Cache & Sessions)]
-        FileSystem[📁 File System<br/>Image Storage<br/>./uploads/)]
+        FileSystem[📁 File System<br/>Image Storage<br/>./uploads/]
     end
     
     subgraph "External Services"
