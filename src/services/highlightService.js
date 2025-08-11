@@ -9,7 +9,7 @@ const highlightService = {
   // Create a new highlight
 async createHighlight(data) {
     try {
-        const { subCategoryId, miniSubCategoryId, listingId, priority } = data;
+        const { subCategoryId, miniSubCategoryId, listingId, priority, specificCategoryId } = data;
 
         // Determine type based on which ID is provided
         let type;
@@ -19,6 +19,8 @@ async createHighlight(data) {
             type = 'MINI_CATEGORY';
         } else if (subCategoryId) {
             type = 'SUBCATEGORY';
+        } else if (specificCategoryId) {
+            type = 'SPECIFIC_CATEGORY';
         } else {
             throw new AppError('At least one ID (subCategoryId, miniSubCategoryId, or listingId) is required', 400);
         }
@@ -43,6 +45,13 @@ async createHighlight(data) {
             }
         }
 
+
+        if (type === 'SPECIFIC_CATEGORY') {
+            const specificCategory = await prisma.specificCategory.findUnique({ where: { id: parseInt(specificCategoryId) } });
+            if (!specificCategory) {
+                throw new AppError('SpecificCategory not found', 404);
+            }
+        }
         // Get the highest priority and increment by 1
         let finalPriority;
         if (priority !== undefined) {
@@ -60,6 +69,7 @@ async createHighlight(data) {
             subCategoryId: type === 'SUBCATEGORY' ? parseInt(subCategoryId) : null,
             miniSubCategoryId: type === 'MINI_CATEGORY' ? parseInt(miniSubCategoryId) : null,
             listingId: type === 'LISTING' ? parseInt(listingId) : null,
+            specificCategoryId: type === 'SPECIFIC_CATEGORY' ? parseInt(specificCategoryId) : null,
         };
 
         const highlight = await prisma.highlight.create({
@@ -68,6 +78,7 @@ async createHighlight(data) {
                 subCategory: true,
                 miniSubCategory: true,
                 listing: true,
+                specificCategory: true,
             }
         });
 
@@ -98,6 +109,7 @@ async getAllHighlights(page = 1, limit = 10, filters = {}) {
                     subCategory: true,
                     miniSubCategory: true,
                     listing: true,
+                    specificCategory: true,
                 },
                 orderBy: [
                     { priority: 'asc' },
@@ -136,6 +148,7 @@ async getAllHighlights(page = 1, limit = 10, filters = {}) {
           subCategory: true,
           miniSubCategory: true,
           listing: true,
+          specificCategory: true,
         }
       });
 
@@ -163,7 +176,7 @@ async getAllHighlights(page = 1, limit = 10, filters = {}) {
         throw new AppError('Highlight not found', 404);
       }
 
-      const { type, subCategoryId, miniSubCategoryId, listingId, priority, isActive } = data;
+      const { type, subCategoryId, miniSubCategoryId, listingId, priority, isActive, specificCategoryId } = data;
 
       const updateData = {};
       if (type !== undefined) {
@@ -172,6 +185,7 @@ async getAllHighlights(page = 1, limit = 10, filters = {}) {
         updateData.subCategoryId = null;
         updateData.miniSubCategoryId = null;
         updateData.listingId = null;
+        updateData.specificCategoryId = null;
       }
       if (priority !== undefined) updateData.priority = parseInt(priority);
       if (isActive !== undefined) updateData.isActive = isActive === 'true';
@@ -183,7 +197,10 @@ async getAllHighlights(page = 1, limit = 10, filters = {}) {
         updateData.miniSubCategoryId = parseInt(miniSubCategoryId);
       } else if (type === 'LISTING' && listingId) {
         updateData.listingId = parseInt(listingId);
+      } else if (type === 'SPECIFIC_CATEGORY' && specificCategoryId) {
+        updateData.specificCategoryId = parseInt(specificCategoryId);
       }
+      
 
       const updatedHighlight = await prisma.highlight.update({
         where: { id: parseInt(id) },
@@ -192,6 +209,7 @@ async getAllHighlights(page = 1, limit = 10, filters = {}) {
           subCategory: true,
           miniSubCategory: true,
           listing: true,
+          specificCategory: true,
         }
       });
 

@@ -163,7 +163,8 @@ model SpecificCategory {
   updatedAt     DateTime    @updatedAt
   listings      Listing[]
   subCategory   SubCategory @relation(fields: [subCategoryId], references: [id], onDelete: Cascade)
-  
+  highlights    Highlight[]
+
 
   @@unique([subCategoryId, name])
   @@index([subCategoryId, name], map: "idx_specific_category_sub_category_name")
@@ -294,6 +295,7 @@ model Highlight {
   type            HighlightType
   subCategoryId   Int?
   miniSubCategoryId Int?
+  specificCategoryId Int?
   listingId       Int?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -302,6 +304,8 @@ model Highlight {
   subCategory     SubCategory?     @relation(fields: [subCategoryId], references: [id], onDelete: Cascade)
   miniSubCategory MiniSubCategory? @relation(fields: [miniSubCategoryId], references: [id], onDelete: Cascade)
   listing         Listing?         @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  specificCategory SpecificCategory? @relation(fields: [specificCategoryId], references: [id], onDelete: Cascade)
+
   
   @@index([isActive])
   @@index([priority])
@@ -313,6 +317,7 @@ model Highlight {
 }
 
 enum HighlightType {
+  SPECIFIC_CATEGORY
   SUBCATEGORY
   MINI_CATEGORY
   LISTING

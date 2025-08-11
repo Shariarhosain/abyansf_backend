@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "HighlightType" ADD VALUE 'SPECIFIC_CATEGORY';
