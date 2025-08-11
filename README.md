@@ -7,8 +7,200 @@
 
 A comprehensive Node.js backend application for the Abyansf platform, featuring real-time notifications, image upload services, and microservices architecture with RabbitMQ message broker.
 
+## 📱 App Design Showcase
+
+### Main Screens
+<div align="center">
+  <img src="docs/images/Main Screen.jpg" alt="Main Screen" width="250" style="margin: 10px;"/>
+  <img src="docs/images/Authentication.jpg" alt="Authentication" width="250" style="margin: 10px;"/>
+  <img src="docs/images/Profile Pages.jpg" alt="Profile Pages" width="250" style="margin: 10px;"/>
+</div>
+
+### Service Screens
+<div align="center">
+  <img src="docs/images/Restaurants.jpg" alt="Restaurants" width="250" style="margin: 10px;"/>
+  <img src="docs/images/Helicopter Tour.jpg" alt="Helicopter Tour" width="250" style="margin: 10px;"/>
+  <img src="docs/images/Signle Service page.jpg" alt="Single Service Page" width="250" style="margin: 10px;"/>
+</div>
+
+### Onboarding & Forms
+<div align="center">
+  <img src="docs/images/Splash Screen/Onboarding Screen.jpg" alt="Onboarding Screen" width="250" style="margin: 10px;"/>
+  <img src="docs/images/Splash Screen/Onboarding Screen-1.jpg" alt="Onboarding Screen 2" width="250" style="margin: 10px;"/>
+  <img src="docs/images/All Form here/Request page.jpg" alt="Request Page" width="250" style="margin: 10px;"/>
+</div>
+
+### Typography & Design System
+<div align="center">
+  <img src="docs/images/Typography.jpg" alt="Typography" width="400" style="margin: 10px;"/>
+</div>
+
+## 🎯 App Features Supported by Backend
+
+The backend services power all the features shown in the app designs above:
+
+### 🔐 Authentication System
+- **User Registration & Login** - Supports the authentication screens
+- **Profile Management** - Powers the profile pages with image uploads
+- **Role-based Access** - Admin, User, and Service Provider roles
+
+### 🏢 Service Categories
+- **Restaurant Bookings** - API endpoints for restaurant reservations
+- **Helicopter Tours** - Booking system for tour packages
+- **Service Listings** - Create and manage service offerings
+- **Image Gallery** - Multiple image upload for each service
+
+### 📱 Real-time Features
+- **Push Notifications** - Booking confirmations and updates
+- **Live Chat Support** - Socket.IO powered messaging
+- **Status Updates** - Real-time booking status changes
+
+### 🎨 Design System Integration
+- **Responsive APIs** - Support for mobile and web interfaces
+- **Image Optimization** - Automatic image processing and CDN serving
+- **Typography Support** - Consistent API response formatting
+
+## 📱 Frontend to Backend Flow
+
+```mermaid
+graph TB
+    subgraph "Mobile App Screens"
+        Auth[🔐 Authentication Screen]
+        Main[🏠 Main Screen]
+        Profile[👤 Profile Screen]
+        Restaurant[🍽️ Restaurant Screen]
+        Helicopter[🚁 Helicopter Tour]
+        Service[⚙️ Service Page]
+        Request[📝 Request Form]
+    end
+    
+    subgraph "Backend APIs"
+        AuthAPI[🔐 Auth API<br/>/api/users/login<br/>/api/users/register]
+        ListingAPI[📋 Listing API<br/>/api/listings<br/>/api/categories]
+        ProfileAPI[👤 Profile API<br/>/api/users/profile]
+        BookingAPI[📅 Booking API<br/>/api/bookings]
+        ImageAPI[📸 Image API<br/>/upload]
+        NotificationAPI[🔔 Notification API<br/>/api/notifications]
+    end
+    
+    subgraph "Real-time Services"
+        Socket[🔌 Socket.IO<br/>Real-time Updates]
+        Push[📱 Push Notifications<br/>Firebase FCM]
+    end
+    
+    subgraph "Background Processing"
+        RabbitMQ[🐰 RabbitMQ<br/>Message Broker]
+        Workers[⚙️ Background Workers]
+    end
+    
+    %% Screen to API connections
+    Auth --> AuthAPI
+    Main --> ListingAPI
+    Profile --> ProfileAPI
+    Restaurant --> BookingAPI
+    Helicopter --> BookingAPI
+    Service --> ImageAPI
+    Request --> BookingAPI
+    
+    %% Real-time connections
+    AuthAPI -.-> Socket
+    BookingAPI -.-> Socket
+    NotificationAPI -.-> Push
+    
+    %% Background processing
+    AuthAPI --> RabbitMQ
+    BookingAPI --> RabbitMQ
+    RabbitMQ --> Workers
+    Workers --> Push
+    
+    %% Styling
+    classDef screen fill:#e3f2fd,stroke:#1976d2
+    classDef api fill:#e8f5e8,stroke:#388e3c
+    classDef realtime fill:#fff3e0,stroke:#f57c00
+    classDef background fill:#f3e5f5,stroke:#7b1fa2
+    
+    class Auth,Main,Profile,Restaurant,Helicopter,Service,Request screen
+    class AuthAPI,ListingAPI,ProfileAPI,BookingAPI,ImageAPI,NotificationAPI api
+    class Socket,Push realtime
+    class RabbitMQ,Workers background
+```
+
+## 🍽️ Restaurant & Tour Booking Flow
+
+This diagram shows how the restaurant and helicopter tour screens connect to the backend:
+
+```mermaid
+sequenceDiagram
+    participant U as User (Mobile App)
+    participant R as Restaurant/Tour Screen
+    participant API as Booking API
+    participant DB as Database
+    participant RMQ as RabbitMQ
+    participant Worker as Booking Worker
+    participant Notify as Notification Service
+    participant Provider as Service Provider
+
+    Note over U,Provider: Complete Booking Flow
+    
+    U->>R: Browse restaurants/tours
+    R->>API: GET /api/listings?category=restaurant
+    API->>DB: Query available services
+    DB->>API: Return listings with images
+    API->>R: Service list with photos
+    R->>U: Display services grid
+    
+    U->>R: Select service & fill form
+    R->>API: POST /api/bookings
+    API->>DB: Create booking record
+    DB->>API: Booking created
+    
+    API->>RMQ: Publish booking_confirmation
+    API->>R: Booking initiated
+    R->>U: Show confirmation screen
+    
+    RMQ->>Worker: Process booking
+    Worker->>Notify: Send notifications
+    Notify->>U: Push notification
+    Notify->>Provider: SMS/Email alert
+    
+    Worker->>API: Update booking status
+    API->>U: Real-time status update
+```
+
+## 📸 Image Gallery Integration
+
+Shows how service images from the design screens are handled:
+
+```mermaid
+graph LR
+    subgraph "Service Provider Flow"
+        A[Service Provider] -->|Upload Images| B[Image Service<br/>Port 3200]
+        B -->|Process & Store| C[File System<br/>./uploads/]
+        B -->|Return URLs| D[Image URLs]
+    end
+    
+    subgraph "Mobile App Display"
+        D -->|API Response| E[Restaurant Screen<br/>Image Gallery]
+        D -->|API Response| F[Helicopter Tour<br/>Photo Carousel]
+        D -->|API Response| G[Service Page<br/>Image Grid]
+    end
+    
+    subgraph "Image Processing"
+        B --> H[Validation<br/>Type, Size, Format]
+        H --> I[Unique Naming<br/>timestamp-random.jpg]
+        I --> J[CDN Ready URLs<br/>localhost:3200/upload/...]
+    end
+    
+    style A fill:#e3f2fd
+    style E fill:#e8f5e8
+    style F fill:#e8f5e8
+    style G fill:#e8f5e8
+    style B fill:#fff3e0
+```
+
 ## 📋 Table of Contents
 
+- [📱 App Design Showcase](#-app-design-showcase)
 - [🏗️ Architecture Overview](#-architecture-overview)
 - [✨ Features](#-features)
 - [🛠️ Tech Stack](#-tech-stack)
