@@ -1926,7 +1926,7 @@ async getAllMiniSubCategories(page = 1, limit = 10, subCategoryId = null) {
                 where,
                 skip,
                 take: limit,
-                orderBy: { createdAt: 'ase' },
+                orderBy: { createdAt: 'asc' },
                 include: {
                     subCategory: {
                         include: {
