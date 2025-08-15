@@ -1,6 +1,9 @@
 import amqp from 'amqplib';
+import dotenv from 'dotenv';
 
-const RABBITMQ_URL = "amqp://OU42sT8rItjfLRc5:aXZLMEaFBmR6BGfeMZzCRKT1ztEd43D5@rabbitmq-u84cgoso0swsogkok4ok4ok0.147.93.111.102.sslip.io:5672";
+dotenv.config();
+
+const RABBITMQ_URL = process.env.RABBITMQ_URL;
 
 
 async function publishToQueue(queue, payload) {
